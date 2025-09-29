@@ -1,8 +1,9 @@
 let socket;
 let currentUser = null;
 let selectedUser = null;
+let allMessages = [];
+let allUsers = [];
 
-// URL твоего бэкенда
 const BACKEND_URL = 'https://quantum-backend-yi39.onrender.com';
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -11,7 +12,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function initializeApp() {
-    // Подключаемся к бэкенду
+    // Подключаемся к серверу
     socket = io(BACKEND_URL);
     
     socket.on('connect', () => {
@@ -21,7 +22,7 @@ function initializeApp() {
     
     socket.on('connect_error', (error) => {
         console.error('❌ Connection error:', error);
-        showError('Ошибка подключения к серверу');
+        showError('Ошибка подключения');
     });
     
     // Обработчики событий
@@ -37,24 +38,23 @@ function initializeApp() {
         showChatScreen();
     });
     
-    socket.on('loginError', (error) => {
-        showError(error);
-    });
-    
-    socket.on('registrationError', (error) => {
-        showError(error);
-    });
-    
     socket.on('usersList', (users) => {
+        console.log('👥 Users list:', users);
+        allUsers = users;
         displayUsers(users);
     });
     
     socket.on('newMessage', (message) => {
-        displayMessage(message);
+        console.log('💬 New message:', message);
+        allMessages.push(message);
+        if (selectedUser) {
+            displayMessage(message);
+        }
     });
     
     socket.on('messageHistory', (messages) => {
-        messages.forEach(msg => displayMessage(msg));
+        console.log('📨 Message history:', messages);
+        allMessages = messages;
     });
     
     // Настройка кнопок
@@ -69,23 +69,21 @@ function setupEventListeners() {
 }
 
 function handleAuth() {
-    const username = document.getElementById('username').value;
-    const password = document.getElementById('password').value;
+    const username = document.getElementById('username').value.trim();
     
-    if (!username || !password) {
-        showError('Введите имя и пароль');
+    if (!username) {
+        showError('Введите имя пользователя');
         return;
     }
     
     hideError();
     
     // ПРОСТОЙ ВХОД - работает всегда
-    socket.emit('login', { username, password });
+    socket.emit('login', { username: username, password: 'any' });
 }
 
 function quickLogin(username) {
     document.getElementById('username').value = username;
-    document.getElementById('password').value = '123';
     handleAuth();
 }
 
@@ -96,7 +94,8 @@ function showError(message) {
 }
 
 function hideError() {
-    document.getElementById('auth-error').style.display = 'none';
+    const errorDiv = document.getElementById('auth-error');
+    errorDiv.style.display = 'none';
 }
 
 function switchAuth() {
@@ -120,7 +119,8 @@ function switchAuth() {
 }
 
 function showChatScreen() {
-    console.log('Showing chat screen');
+    console.log('🔄 Showing chat screen');
+    
     document.getElementById('auth-screen').style.display = 'none';
     document.getElementById('chat-screen').style.display = 'block';
     
@@ -134,8 +134,18 @@ function displayUsers(users) {
     const usersList = document.getElementById('users-list');
     usersList.innerHTML = '';
     
-    users.forEach(user => {
-        if (user.id !== currentUser.id) {
+    // Добавляем тестовых пользователей
+    const testUsers = [
+        { id: 1, username: 'Иван', isOnline: true },
+        { id: 2, username: 'Мария', isOnline: true },
+        { id: 3, username: 'Алексей', isOnline: true },
+        { id: 4, username: 'Анна', isOnline: true }
+    ];
+    
+    const allUsersList = [...testUsers, ...users.filter(u => u.id !== currentUser.id)];
+    
+    allUsersList.forEach(user => {
+        if (user.username !== currentUser.username) {
             const userElement = document.createElement('div');
             userElement.className = 'user-item';
             userElement.innerHTML = `
@@ -152,12 +162,22 @@ function displayUsers(users) {
 
 function selectUser(user) {
     selectedUser = user;
+    console.log('👤 Selected user:', user.username);
+    
     document.getElementById('selected-user-name').textContent = user.username;
     document.getElementById('message-input-area').style.display = 'flex';
     
-    // Очищаем чат
-    document.getElementById('messages-container').innerHTML = 
-        `<div class="welcome-message">Начало переписки с ${user.username}</div>`;
+    // Очищаем и показываем чат
+    const container = document.getElementById('messages-container');
+    container.innerHTML = `<div class="welcome-message">Начало переписки с ${user.username}</div>`;
+    
+    // Показываем историю сообщений
+    const userMessages = allMessages.filter(msg => 
+        (msg.senderId === currentUser.id && msg.receiverId === user.id) ||
+        (msg.senderId === user.id && msg.receiverId === currentUser.id)
+    );
+    
+    userMessages.forEach(message => displayMessage(message));
 }
 
 function sendMessage() {
@@ -182,11 +202,13 @@ function sendMessage() {
 }
 
 function displayMessage(message) {
-    if (!selectedUser || (message.senderId !== currentUser.id && message.receiverId !== selectedUser.id)) {
-        return;
+    const container = document.getElementById('messages-container');
+    
+    // Убираем welcome сообщение если есть
+    if (container.querySelector('.welcome-message')) {
+        container.innerHTML = '';
     }
     
-    const container = document.getElementById('messages-container');
     const messageElement = document.createElement('div');
     messageElement.className = `message ${message.senderId === currentUser.id ? 'own' : 'other'}`;
     
@@ -209,7 +231,5 @@ function logout() {
     selectedUser = null;
     document.getElementById('chat-screen').style.display = 'none';
     document.getElementById('auth-screen').style.display = 'block';
-    
     document.getElementById('username').value = '';
-    document.getElementById('password').value = '';
 }
