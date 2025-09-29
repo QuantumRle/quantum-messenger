@@ -5,7 +5,7 @@ let allMessages = [];
 let allUsers = [];
 
 // URL бэкенда (замени на свой Render URL)
-const BACKEND_URL = 'https://your-quantum-backend.onrender.com';
+const BACKEND_URL = 'https://quantum-backend-yi39.onrender.com';
 
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🌌 Quantum Messenger Global Edition started...');
@@ -369,4 +369,5 @@ style.textContent = `
         font-weight: 600;
     }
 `;
+
 document.head.appendChild(style);
