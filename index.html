@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quantum Messenger - Глобальный чат</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Экран входа/регистрации -->
+        <div id="auth-screen" class="screen active">
+            <div class="container">
+                <div class="logo">
+                    <h1>🌌 Quantum Messenger</h1>
+                    <p class="subtitle">Глобальный мессенджер</p>
+                </div>
+                <div class="auth-form">
+                    <h2 id="auth-title">Вход в систему</h2>
+                    <div id="auth-error" class="error-message" style="display: none;"></div>
+                    
+                    <input type="text" id="username" placeholder="Имя пользователя" autocomplete="username">
+                    <input type="email" id="email" placeholder="Email" style="display: none;" autocomplete="email">
+                    <input type="password" id="password" placeholder="Пароль" autocomplete="current-password">
+                    
+                    <button id="auth-button" class="btn-primary">Войти</button>
+                    <p id="auth-switch">Нет аккаунта? <a href="#" onclick="switchAuth()">Зарегистрироваться</a></p>
+                </div>
+                
+                <div class="demo-users">
+                    <p>Быстрый вход (тестовые пользователи):</p>
+                    <div class="demo-buttons">
+                        <button onclick="quickLogin('Иван')" class="btn-demo">Иван</button>
+                        <button onclick="quickLogin('Мария')" class="btn-demo">Мария</button>
+                        <button onclick="quickLogin('Алексей')" class="btn-demo">Алексей</button>
+                        <button onclick="quickLogin('Анна')" class="btn-demo">Анна</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Экран чата -->
+        <div id="chat-screen" class="screen">
+            <div class="chat-container">
+                <div class="chat-header">
+                    <div class="header-left">
+                        <h2>🌌 Quantum</h2>
+                        <span class="online-count" id="online-count">0 онлайн</span>
+                    </div>
+                    <div class="user-info">
+                        <span id="current-user"></span>
+                        <button onclick="logout()" class="logout-btn">Выйти</button>
+                    </div>
+                </div>
+                
+                <div class="chat-content">
+                    <div class="users-sidebar">
+                        <div class="sidebar-header">
+                            <h3>Пользователи</h3>
+                            <div class="search-box">
+                                <input type="text" id="user-search" placeholder="Поиск..." onkeyup="searchUsers()">
+                            </div>
+                        </div>
+                        
+                        <div class="users-list" id="users-list">
+                            <div class="loading">Загрузка пользователей...</div>
+                        </div>
+                    </div>
+                    
+                    <div class="chat-area">
+                        <div id="chat-header">
+                            <div id="selected-user-info">
+                                <div class="selected-user">
+                                    <span id="selected-user-name">Выберите пользователя для чата</span>
+                                    <span id="user-status" class="status-offline"></span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="messages-container">
+                            <div class="welcome-message">
+                                <div class="welcome-icon">💬</div>
+                                <h3>Добро пожаловать в Quantum Messenger!</h3>
+                                <p>Выберите пользователя из списка слева чтобы начать общение</p>
+                                <div class="features">
+                                    <div class="feature">🌍 Глобальный доступ</div>
+                                    <div class="feature">⚡ Сообщения в реальном времени</div>
+                                    <div class="feature">🔐 Безопасное соединение</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="message-input" style="display: none;" id="message-input-area">
+                            <input type="text" id="message-text" placeholder="Введите сообщение...">
+                            <button onclick="sendMessage()" id="send-button" class="btn-primary">Отправить</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
