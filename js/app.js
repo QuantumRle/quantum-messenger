@@ -1,10 +1,16 @@
 let socket;
 let currentUser = null;
-let selectedUser = null;
+let selectedChat = null;
 let allMessages = [];
 let allUsers = [];
+let friends = [];
+let groups = [];
+let notifications = [];
 
 const BACKEND_URL = 'https://quantum-backend-yi39.onrender.com';
+
+// Эмодзи для реакций
+const EMOJIS = ['😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇', '❤️', '👍', '👎', '🔥', '⭐', '🎉', '🙏', '💯', '👏', '🙌'];
 
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🌌 Quantum Messenger started');
@@ -18,11 +24,13 @@ function initializeApp() {
     socket.on('connect', () => {
         console.log('✅ Connected to server');
         hideError();
+        showNotification('Подключено к серверу', 'success');
     });
     
     socket.on('connect_error', (error) => {
         console.error('❌ Connection error:', error);
-        showError('Ошибка подключения');
+        showError('Ошибка подключения к серверу');
+        showNotification('Ошибка подключения', 'error');
     });
     
     // Обработчики событий
@@ -30,31 +38,113 @@ function initializeApp() {
         console.log('✅ Login success:', user);
         currentUser = user;
         showChatScreen();
-    });
-    
-    socket.on('registrationSuccess', (user) => {
-        console.log('✅ Registration success:', user);
-        currentUser = user;
-        showChatScreen();
+        updateUserAvatar();
+        showNotification(`Добро пожаловать, ${user.username}!`, 'success');
     });
     
     socket.on('usersList', (users) => {
-        console.log('👥 Users list:', users);
+        console.log('👥 Users list:', users.length);
         allUsers = users;
-        displayUsers(users);
+        updateOnlineCount();
+        renderUsersList();
+    });
+    
+    socket.on('friendsList', (friendsList) => {
+        console.log('🤝 Friends list:', friendsList.length);
+        friends = friendsList;
+        renderFriendsList();
+        renderGroupsTab();
+    });
+    
+    socket.on('groupsList', (groupsList) => {
+        console.log('👥 Groups list:', groupsList.length);
+        groups = groupsList;
+        renderGroupsList();
     });
     
     socket.on('newMessage', (message) => {
         console.log('💬 New message:', message);
         allMessages.push(message);
-        if (selectedUser) {
+        
+        if (selectedChat && (
+            (selectedChat.type === 'user' && selectedChat.id === message.senderId) ||
+            (selectedChat.type === 'group' && selectedChat.id === message.groupId)
+        )) {
             displayMessage(message);
+        } else {
+            // Показать уведомление о новом сообщении
+            if (message.senderId !== currentUser.id) {
+                showNotification(`Новое сообщение от ${message.senderName}`, 'info');
+            }
         }
+        
+        updateChatsList();
     });
     
     socket.on('messageHistory', (messages) => {
-        console.log('📨 Message history:', messages);
+        console.log('📨 Message history:', messages.length);
         allMessages = messages;
+        if (selectedChat) {
+            displayChatHistory();
+        }
+    });
+    
+    socket.on('messageUpdated', (message) => {
+        const index = allMessages.findIndex(m => m.id === message.id);
+        if (index > -1) {
+            allMessages[index] = message;
+            if (selectedChat) {
+                displayChatHistory();
+            }
+        }
+    });
+    
+    socket.on('searchResults', (results) => {
+        renderSearchResults(results);
+    });
+    
+    socket.on('friendRequest', (data) => {
+        console.log('📩 Friend request from:', data.from.username);
+        showNotification(`${data.from.username} отправил запрос в друзья`, 'info');
+        renderFriendsList();
+    });
+    
+    socket.on('friendRequestSent', (friend) => {
+        showNotification(`Запрос в друзья отправлен ${friend.username}`, 'success');
+    });
+    
+    socket.on('friendAccepted', (friend) => {
+        console.log('✅ Friend accepted:', friend.username);
+        showNotification(`${friend.username} принял вашу заявку в друзья`, 'success');
+        renderFriendsList();
+    });
+    
+    socket.on('groupCreated', (group) => {
+        console.log('👥 Group created:', group.name);
+        groups.push(group);
+        renderGroupsList();
+        showNotification(`Вы добавлены в группу "${group.name}"`, 'success');
+    });
+    
+    socket.on('userStatusUpdate', (user) => {
+        const index = allUsers.findIndex(u => u.id === user.id);
+        if (index > -1) {
+            allUsers[index] = user;
+        }
+        updateOnlineCount();
+        renderUsersList();
+        renderFriendsList();
+        
+        if (selectedChat && selectedChat.type === 'user' && selectedChat.id === user.id) {
+            updateChatStatus(user);
+        }
+    });
+    
+    socket.on('newNotification', (notification) => {
+        console.log('🔔 New notification:', notification);
+        notifications.push(notification);
+        updateNotificationBadge();
+        showNotification(notification.message, 'info');
     });
     
     // Настройка кнопок
@@ -63,8 +153,15 @@ function initializeApp() {
 
 function setupEventListeners() {
     document.getElementById('auth-button').addEventListener('click', handleAuth);
-    document.getElementById('password').addEventListener('keypress', (e) => {
+    document.getElementById('username').addEventListener('keypress', (e) => {
         if (e.key === 'Enter') handleAuth();
+    });
+    
+    // Закрытие dropdown при клике вне его
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.dropdown')) {
+            closeAllDropdowns();
+        }
     });
 }
 
@@ -76,15 +173,20 @@ function handleAuth() {
         return;
     }
     
+    if (username.length < 2) {
+        showError('Имя должно быть не менее 2 символов');
+        return;
+    }
+    
     hideError();
     
-    // ПРОСТОЙ ВХОД - работает всегда
-    socket.emit('login', { username: username, password: 'any' });
-}
-
-function quickLogin(username) {
-    document.getElementById('username').value = username;
-    handleAuth();
+    // Показываем загрузку
+    const authButton = document.getElementById('auth-button');
+    authButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Подключение...';
+    authButton.disabled = true;
+    
+    // Простой вход - работает всегда
+    socket.emit('login', { username: username });
 }
 
 function showError(message) {
@@ -98,91 +200,362 @@ function hideError() {
     errorDiv.style.display = 'none';
 }
 
-function switchAuth() {
-    const title = document.getElementById('auth-title');
-    const button = document.getElementById('auth-button');
-    const switchText = document.getElementById('auth-switch');
-    const emailField = document.getElementById('email');
-    
-    if (title.textContent === 'Вход в систему') {
-        title.textContent = 'Регистрация';
-        button.textContent = 'Зарегистрироваться';
-        switchText.innerHTML = 'Есть аккаунт? <a href="#" onclick="switchAuth()">Войти</a>';
-        emailField.style.display = 'block';
-    } else {
-        title.textContent = 'Вход в систему';
-        button.textContent = 'Войти';
-        switchText.innerHTML = 'Нет аккаунта? <a href="#" onclick="switchAuth()">Зарегистрироваться</a>';
-        emailField.style.display = 'none';
-    }
-    hideError();
-}
-
 function showChatScreen() {
     console.log('🔄 Showing chat screen');
     
-    document.getElementById('auth-screen').style.display = 'none';
-    document.getElementById('chat-screen').style.display = 'block';
+    document.getElementById('auth-screen').classList.remove('active');
+    document.getElementById('chat-screen').classList.add('active');
     
     document.getElementById('current-user').textContent = currentUser.username;
-    
-    // Загружаем пользователей
-    socket.emit('getUsers');
+    updateUserAvatar();
 }
 
-function displayUsers(users) {
-    const usersList = document.getElementById('users-list');
-    usersList.innerHTML = '';
+function updateUserAvatar() {
+    const avatar = document.getElementById('user-avatar');
+    if (currentUser.avatar) {
+        avatar.src = currentUser.avatar;
+    }
+}
+
+function updateOnlineCount() {
+    const onlineCount = allUsers.filter(user => user.isOnline).length;
+    const countElement = document.getElementById('online-count');
+    if (countElement) {
+        countElement.textContent = `${onlineCount} онлайн`;
+    }
+}
+
+// Система вкладок
+function showTab(tabName) {
+    // Скрываем все вкладки
+    document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    document.querySelectorAll('.tab-button').forEach(btn => {
+        btn.classList.remove('active');
+    });
     
-    // Добавляем тестовых пользователей
-    const testUsers = [
-        { id: 1, username: 'Иван', isOnline: true },
-        { id: 2, username: 'Мария', isOnline: true },
-        { id: 3, username: 'Алексей', isOnline: true },
-        { id: 4, username: 'Анна', isOnline: true }
-    ];
+    // Показываем выбранную вкладку
+    document.getElementById(`${tabName}-tab`).classList.add('active');
+    document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
     
-    const allUsersList = [...testUsers, ...users.filter(u => u.id !== currentUser.id)];
+    // Загружаем данные для вкладки
+    switch(tabName) {
+        case 'friends':
+            socket.emit('getFriends');
+            break;
+        case 'groups':
+            socket.emit('getGroups');
+            break;
+        case 'chats':
+            updateChatsList();
+            break;
+    }
+}
+
+// Рендеринг списков
+function renderUsersList() {
+    // Эта функция будет обновлять список в поиске
+}
+
+function renderFriendsList() {
+    const friendsList = document.getElementById('friends-list');
+    if (!friendsList) return;
     
-    allUsersList.forEach(user => {
-        if (user.username !== currentUser.username) {
-            const userElement = document.createElement('div');
-            userElement.className = 'user-item';
-            userElement.innerHTML = `
-                <div class="user-info-small">
-                    <span class="status-${user.isOnline ? 'online' : 'offline'}"></span>
-                    <span>${user.username}</span>
+    if (friends.length === 0) {
+        friendsList.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-users"></i>
+                <p>У вас пока нет друзей</p>
+                <button class="btn-secondary" onclick="showAddFriend()" style="margin-top: 1rem;">
+                    Найти друзей
+                </button>
+            </div>
+        `;
+        return;
+    }
+    
+    friendsList.innerHTML = friends.map(friend => `
+        <div class="friend-item" onclick="selectUserChat('${friend.id}')">
+            <img src="${friend.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(friend.username)}&background=667eea&color=fff`}" class="avatar">
+            <div class="friend-info">
+                <div class="friend-name">${friend.username}</div>
+                <div class="friend-status ${friend.isOnline ? 'online' : 'offline'}">
+                    ${friend.isOnline ? 'В сети' : `Был(а) ${formatLastSeen(friend.lastSeen)}`}
                 </div>
-            `;
-            userElement.onclick = () => selectUser(user);
-            usersList.appendChild(userElement);
-        }
+            </div>
+            <div class="status-indicator ${friend.isOnline ? 'online' : 'offline'}"></div>
+        </div>
+    `).join('');
+}
+
+function renderGroupsList() {
+    const groupsList = document.getElementById('groups-list');
+    if (!groupsList) return;
+    
+    if (groups.length === 0) {
+        groupsList.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-layer-group"></i>
+                <p>У вас пока нет групп</p>
+                <button class="btn-secondary" onclick="showCreateGroup()" style="margin-top: 1rem;">
+                    Создать группу
+                </button>
+            </div>
+        `;
+        return;
+    }
+    
+    groupsList.innerHTML = groups.map(group => `
+        <div class="group-item" onclick="selectGroupChat('${group.id}')">
+            <img src="${group.avatar}" class="avatar">
+            <div class="group-info">
+                <div class="group-name">${group.name}</div>
+                <div class="group-members">${group.members.length} участников</div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function renderSearchResults(results) {
+    const searchResults = document.getElementById('search-results');
+    if (!searchResults) return;
+    
+    if (results.length === 0) {
+        searchResults.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-search"></i>
+                <p>Ничего не найдено</p>
+            </div>
+        `;
+        return;
+    }
+    
+    searchResults.innerHTML = results.map(user => `
+        <div class="search-item">
+            <img src="${user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username)}&background=667eea&color=fff`}" class="avatar">
+            <div class="search-info">
+                <div class="search-name">${user.username}</div>
+                <div class="search-status ${user.isOnline ? 'online' : 'offline'}">
+                    ${user.isOnline ? 'В сети' : 'Не в сети'}
+                </div>
+            </div>
+            <div class="search-actions">
+                ${user.isFriend ? 
+                    '<span class="friend-badge">Друг</span>' :
+                    user.hasPendingRequest ?
+                    '<span class="pending-badge">Запрос отправлен</span>' :
+                    `<button class="btn-primary btn-small" onclick="addFriend('${user.id}')">
+                        <i class="fas fa-user-plus"></i> Добавить
+                    </button>`
+                }
+            </div>
+        </div>
+    `).join('');
+}
+
+// Поиск пользователей
+function searchUsers() {
+    const searchTerm = document.getElementById('global-search').value.trim();
+    
+    if (searchTerm.length < 2) {
+        document.getElementById('search-results').innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-search"></i>
+                <p>Введите минимум 2 символа</p>
+            </div>
+        `;
+        return;
+    }
+    
+    socket.emit('searchUsers', searchTerm);
+}
+
+// Работа с друзьями
+function showAddFriend() {
+    // Просто переключаем на вкладку поиска
+    showTab('search');
+    document.getElementById('global-search').focus();
+}
+
+function addFriend(friendId) {
+    socket.emit('addFriend', friendId);
+}
+
+// Работа с группами
+function showCreateGroup() {
+    // В упрощенной версии создаем группу сразу
+    const groupName = prompt('Введите название группы:');
+    if (groupName && groupName.trim()) {
+        createGroup(groupName.trim());
+    }
+}
+
+function createGroup(groupName) {
+    // В упрощенной версии создаем группу только с текущим пользователем
+    socket.emit('createGroup', {
+        name: groupName,
+        members: [], // Только создатель
+        description: ''
     });
 }
 
-function selectUser(user) {
-    selectedUser = user;
-    console.log('👤 Selected user:', user.username);
+// Выбор чатов
+function selectUserChat(userId) {
+    const user = allUsers.find(u => u.id === userId);
+    if (!user) return;
     
-    document.getElementById('selected-user-name').textContent = user.username;
-    document.getElementById('message-input-area').style.display = 'flex';
+    selectedChat = {
+        type: 'user',
+        id: userId,
+        name: user.username,
+        avatar: user.avatar
+    };
     
-    // Очищаем и показываем чат
-    const container = document.getElementById('messages-container');
-    container.innerHTML = `<div class="welcome-message">Начало переписки с ${user.username}</div>`;
-    
-    // Показываем историю сообщений
-    const userMessages = allMessages.filter(msg => 
-        (msg.senderId === currentUser.id && msg.receiverId === user.id) ||
-        (msg.senderId === user.id && msg.receiverId === currentUser.id)
-    );
-    
-    userMessages.forEach(message => displayMessage(message));
+    showChat();
 }
 
+function selectGroupChat(groupId) {
+    const group = groups.find(g => g.id === groupId);
+    if (!group) return;
+    
+    selectedChat = {
+        type: 'group',
+        id: groupId,
+        name: group.name,
+        avatar: group.avatar
+    };
+    
+    showChat();
+}
+
+function showChat() {
+    if (!selectedChat) return;
+    
+    // Обновляем заголовок чата
+    document.getElementById('selected-chat-name').textContent = selectedChat.name;
+    document.getElementById('chat-avatar').src = selectedChat.avatar;
+    
+    // Обновляем статус
+    if (selectedChat.type === 'user') {
+        const user = allUsers.find(u => u.id === selectedChat.id);
+        updateChatStatus(user);
+    } else {
+        document.getElementById('chat-status').textContent = 'Групповой чат';
+        document.getElementById('chat-status').className = 'status';
+    }
+    
+    // Показываем поле ввода
+    document.getElementById('message-input-area').style.display = 'flex';
+    
+    // Показываем историю сообщений
+    displayChatHistory();
+}
+
+function updateChatStatus(user) {
+    const statusElement = document.getElementById('chat-status');
+    if (user.isOnline) {
+        statusElement.textContent = 'В сети';
+        statusElement.className = 'status online';
+    } else {
+        statusElement.textContent = `Был(а) ${formatLastSeen(user.lastSeen)}`;
+        statusElement.className = 'status offline';
+    }
+}
+
+function displayChatHistory() {
+    const container = document.getElementById('messages-container');
+    container.innerHTML = '';
+    
+    let chatMessages = [];
+    
+    if (selectedChat.type === 'user') {
+        chatMessages = allMessages.filter(msg => 
+            (msg.senderId === currentUser.id && msg.receiverId === selectedChat.id) ||
+            (msg.senderId === selectedChat.id && msg.receiverId === currentUser.id)
+        );
+    } else {
+        chatMessages = allMessages.filter(msg => msg.groupId === selectedChat.id);
+    }
+    
+    // Сортируем по времени
+    chatMessages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    
+    if (chatMessages.length === 0) {
+        container.innerHTML = `
+            <div class="welcome-message">
+                <div class="welcome-icon">
+                    <i class="fas fa-comments"></i>
+                </div>
+                <h3>Начало переписки</h3>
+                <p>Напишите первое сообщение!</p>
+            </div>
+        `;
+        return;
+    }
+    
+    chatMessages.forEach(message => displayMessage(message));
+    
+    // Прокручиваем вниз
+    container.scrollTop = container.scrollHeight;
+}
+
+function displayMessage(message) {
+    const container = document.getElementById('messages-container');
+    
+    // Убираем welcome сообщение если есть
+    const welcomeMessage = container.querySelector('.welcome-message');
+    if (welcomeMessage) {
+        container.innerHTML = '';
+    }
+    
+    const messageElement = document.createElement('div');
+    const isOwnMessage = message.senderId === currentUser.id;
+    
+    messageElement.className = `message ${isOwnMessage ? 'own' : 'other'}`;
+    
+    const time = new Date(message.timestamp).toLocaleTimeString('ru-RU', { 
+        hour: '2-digit', minute: '2-digit' 
+    });
+    
+    let messageHTML = '';
+    
+    if (message.type === 'system') {
+        messageElement.className = 'message-system';
+        messageHTML = `<div class="message-text">${message.text}</div>`;
+    } else {
+        messageHTML = `
+            ${!isOwnMessage && selectedChat.type === 'group' ? 
+                `<div class="message-sender">${message.senderName}</div>` : ''}
+            <div class="message-text">${message.text}</div>
+            ${message.reactions && message.reactions.length > 0 ? `
+                <div class="message-reactions">
+                    ${message.reactions.map(reaction => 
+                        `<span class="reaction" onclick="toggleReaction('${message.id}', '${reaction.emoji}')">
+                            ${reaction.emoji} ${reaction.count || ''}
+                        </span>`
+                    ).join('')}
+                </div>
+            ` : ''}
+            <div class="message-time">${time}</div>
+        `;
+    }
+    
+    messageElement.innerHTML = messageHTML;
+    messageElement.onclick = (e) => {
+        if (e.target.classList.contains('message-text')) {
+            showMessageActions(message.id);
+        }
+    };
+    
+    container.appendChild(messageElement);
+    container.scrollTop = container.scrollHeight;
+}
+
+// Отправка сообщений
 function sendMessage() {
-    if (!selectedUser) {
-        alert('Выберите пользователя');
+    if (!selectedChat) {
+        showNotification('Выберите чат для отправки сообщения', 'warning');
         return;
     }
     
@@ -191,45 +564,202 @@ function sendMessage() {
     
     if (!text) return;
     
-    socket.emit('sendMessage', {
-        senderId: currentUser.id,
-        senderName: currentUser.username,
-        receiverId: selectedUser.id,
-        text: text
-    });
+    const messageData = {
+        text: text,
+        type: 'text'
+    };
     
+    if (selectedChat.type === 'user') {
+        messageData.receiverId = selectedChat.id;
+    } else {
+        messageData.groupId = selectedChat.id;
+    }
+    
+    socket.emit('sendMessage', messageData);
     textInput.value = '';
 }
 
-function displayMessage(message) {
-    const container = document.getElementById('messages-container');
+function handleKeyPress(event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendMessage();
+    }
+}
+
+// Реакции на сообщения
+function toggleReaction(messageId, emoji) {
+    socket.emit('addReaction', {
+        messageId: messageId,
+        emoji: emoji
+    });
+}
+
+function showMessageActions(messageId) {
+    // В упрощенной версии просто показываем быстрые реакции
+    const quickReactions = ['👍', '❤️', '😂', '😮', '😢'];
+    showNotification('Нажмите на эмодзи для реакции', 'info');
+}
+
+// Эмодзи
+function toggleEmojiPicker() {
+    const picker = document.getElementById('emoji-picker');
+    picker.style.display = picker.style.display === 'none' ? 'block' : 'none';
+}
+
+function addEmoji(emoji) {
+    const textInput = document.getElementById('message-text');
+    textInput.value += emoji;
+    textInput.focus();
+    toggleEmojiPicker();
+}
+
+// Файлы (упрощенная версия)
+function triggerFileUpload() {
+    document.getElementById('file-upload').click();
+}
+
+function handleFileUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
     
-    // Убираем welcome сообщение если есть
-    if (container.querySelector('.welcome-message')) {
-        container.innerHTML = '';
+    if (file.size > 40 * 1024 * 1024) { // 40MB
+        showNotification('Файл слишком большой (максимум 40MB)', 'error');
+        return;
     }
     
-    const messageElement = document.createElement('div');
-    messageElement.className = `message ${message.senderId === currentUser.id ? 'own' : 'other'}`;
+    // В реальном приложении здесь была бы загрузка файла
+    showNotification(`Файл "${file.name}" готов к отправке`, 'info');
     
-    const time = new Date(message.timestamp).toLocaleTimeString('ru-RU', { 
-        hour: '2-digit', minute: '2-digit' 
-    });
+    if (selectedChat) {
+        const textInput = document.getElementById('message-text');
+        textInput.value = `[Файл: ${file.name}]`;
+    }
+}
+
+// Уведомления
+function showNotification(message, type = 'info') {
+    const toast = document.getElementById('notification-toast');
+    const bgColor = type === 'error' ? 'var(--error-color)' : 
+                   type === 'success' ? 'var(--success-color)' : 
+                   type === 'warning' ? 'var(--warning-color)' : 
+                   'var(--primary-color)';
     
-    messageElement.innerHTML = `
-        ${message.senderId !== currentUser.id ? `<div class="message-sender">${message.senderName}</div>` : ''}
-        <div class="message-text">${message.text}</div>
-        <div class="message-time">${time}</div>
+    toast.innerHTML = `
+        <div style="border-left-color: ${bgColor}">
+            <div style="font-weight: 600; margin-bottom: 0.25rem;">Quantum</div>
+            <div>${message}</div>
+        </div>
     `;
+    toast.style.display = 'block';
     
-    container.appendChild(messageElement);
-    container.scrollTop = container.scrollHeight;
+    setTimeout(() => {
+        toast.style.display = 'none';
+    }, 3000);
+}
+
+function toggleNotifications() {
+    // В упрощенной версии просто показываем уведомление
+    showNotification('Уведомления работают в реальном времени', 'info');
+}
+
+function updateNotificationBadge() {
+    const unreadCount = notifications.filter(n => !n.read).length;
+    const badge = document.getElementById('notification-badge');
+    
+    if (unreadCount > 0) {
+        badge.textContent = unreadCount;
+        badge.style.display = 'flex';
+    } else {
+        badge.style.display = 'none';
+    }
+}
+
+// Статусы
+function updateStatus(status) {
+    socket.emit('updateStatus', status);
+    showNotification(`Статус изменен на: ${getStatusText(status)}`, 'success');
+    closeAllDropdowns();
+}
+
+function getStatusText(status) {
+    const statusMap = {
+        'online': 'В сети',
+        'away': 'Отошел',
+        'dnd': 'Не беспокоить',
+        'offline': 'Не в сети'
+    };
+    return statusMap[status] || status;
+}
+
+// Вспомогательные функции
+function formatLastSeen(lastSeen) {
+    if (!lastSeen) return 'давно';
+    
+    const now = new Date();
+    const seen = new Date(lastSeen);
+    const diffMinutes = Math.floor((now - seen) / (1000 * 60));
+    
+    if (diffMinutes < 1) return 'только что';
+    if (diffMinutes < 60) return `${diffMinutes} мин назад`;
+    if (diffMinutes < 1440) return `${Math.floor(diffMinutes / 60)} ч назад`;
+    return `${Math.floor(diffMinutes / 1440)} дн назад`;
+}
+
+function toggleDropdown(event) {
+    event.stopPropagation();
+    const dropdown = document.getElementById('user-dropdown');
+    dropdown.classList.toggle('show');
+}
+
+function closeAllDropdowns() {
+    document.querySelectorAll('.dropdown-menu').forEach(menu => {
+        menu.classList.remove('show');
+    });
+}
+
+function updateChatsList() {
+    // В упрощенной версии не реализовано
+}
+
+function startNewChat() {
+    showTab('search');
+}
+
+function showChatInfo() {
+    if (!selectedChat) {
+        showNotification('Выберите чат', 'warning');
+        return;
+    }
+    
+    const info = selectedChat.type === 'user' ? 
+        `Личная переписка с ${selectedChat.name}` :
+        `Группа: ${selectedChat.name}`;
+    
+    showNotification(info, 'info');
 }
 
 function logout() {
-    currentUser = null;
-    selectedUser = null;
-    document.getElementById('chat-screen').style.display = 'none';
-    document.getElementById('auth-screen').style.display = 'block';
-    document.getElementById('username').value = '';
+    if (confirm('Выйти из аккаунта?')) {
+        currentUser = null;
+        selectedChat = null;
+        allMessages = [];
+        allUsers = [];
+        friends = [];
+        groups = [];
+        notifications = [];
+        
+        document.getElementById('chat-screen').classList.remove('active');
+        document.getElementById('auth-screen').classList.add('active');
+        
+        document.getElementById('username').value = '';
+        document.getElementById('auth-button').innerHTML = '<i class="fas fa-rocket"></i> Начать общение';
+        document.getElementById('auth-button').disabled = false;
+        
+        if (socket) {
+            socket.disconnect();
+        }
+    }
 }
+
+// Инициализация при загрузке
+console.log('🚀 Quantum Messenger initialized');
