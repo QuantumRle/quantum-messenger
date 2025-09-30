@@ -556,3 +556,4 @@ server.listen(PORT, () => {
   console.log(`🗄️ MongoDB Atlas Connected`);
   console.log(`🔒 Friend-only messaging enabled`);
 });
+
