@@ -4,98 +4,111 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Quantum Messenger</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="css/style.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: Arial; 
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1b2e 100%);
+            color: white;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .container {
+            background: #25283d;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+        h1 {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+        .tabs {
+            display: flex;
+            background: #1a1b2e;
+            border-radius: 10px;
+            padding: 5px;
+            margin: 20px 0;
+        }
+        .tab {
+            flex: 1;
+            padding: 12px;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: 0.3s;
+        }
+        .tab.active {
+            background: #667eea;
+        }
+        input {
+            width: 100%;
+            padding: 15px;
+            margin: 10px 0;
+            background: #1a1b2e;
+            border: 2px solid #373a55;
+            border-radius: 10px;
+            color: white;
+            font-size: 16px;
+        }
+        button {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px 0;
+        }
+        .hidden { display: none; }
+    </style>
 </head>
 <body>
-    <div id="app">
-        <!-- Экран авторизации -->
-        <div id="auth-screen" class="screen active">
-            <div class="container">
-                <div class="logo">
-                    <h1><i class="fas fa-atom"></i> Quantum</h1>
-                    <p class="subtitle">Мессенджер для реальных людей</p>
-                </div>
-                
-                <div class="auth-form">
-                    <div class="tabs">
-                        <div class="tab active" onclick="showAuthTab('login')">Вход</div>
-                        <div class="tab" onclick="showAuthTab('register')">Регистрация</div>
-                    </div>
-                    
-                    <!-- Форма входа -->
-                    <div id="login-form" class="auth-tab">
-                        <h2>Вход в аккаунт</h2>
-                        <div id="auth-error" class="error-message" style="display: none;"></div>
-                        
-                        <input type="text" id="login-input" placeholder="Телефон, email или логин">
-                        <input type="password" id="login-password" placeholder="Пароль">
-                        
-                        <button class="btn-primary" onclick="login()">
-                            <i class="fas fa-sign-in-alt"></i> Войти
-                        </button>
-                    </div>
-                    
-                    <!-- Форма регистрации -->
-                    <div id="register-form" class="auth-tab" style="display: none;">
-                        <h2>Создать аккаунт</h2>
-                        <div id="reg-error" class="error-message" style="display: none;"></div>
-                        
-                        <input type="text" id="reg-phone" placeholder="Номер телефона" required>
-                        <input type="email" id="reg-email" placeholder="Email" required>
-                        <input type="text" id="reg-username" placeholder="Логин" required>
-                        <input type="password" id="reg-password" placeholder="Пароль" required>
-                        <div class="sms-group">
-                            <input type="text" id="reg-sms" placeholder="SMS код" value="1111" required>
-                            <button type="button" class="btn-secondary" onclick="sendSMS()">Отправить SMS</button>
-                        </div>
-                        
-                        <button class="btn-primary" onclick="register()">
-                            <i class="fas fa-user-plus"></i> Зарегистрироваться
-                        </button>
-                    </div>
-                </div>
-                
-                <div class="features-preview">
-                    <div class="feature-item">
-                        <i class="fas fa-user-friends"></i>
-                        <span>Только реальные пользователи</span>
-                    </div>
-                    <div class="feature-item">
-                        <i class="fas fa-shield-alt"></i>
-                        <span>Безопасное общение</span>
-                    </div>
-                    <div class="feature-item">
-                        <i class="fas fa-cog"></i>
-                        <span>Персональные настройки</span>
-                    </div>
-                </div>
-            </div>
+    <div class="container">
+        <h1>🌌 Quantum</h1>
+        <p style="color: #a0a0c0; margin-bottom: 20px;">Мессенджер для реальных людей</p>
+        
+        <div class="tabs">
+            <div class="tab active" onclick="showTab('login')">Вход</div>
+            <div class="tab" onclick="showTab('register')">Регистрация</div>
         </div>
-
-        <!-- Экран чата (остается как был) -->
-        <div id="chat-screen" class="screen">
-            <!-- ТВОЙ СТАРЫЙ КОД ЧАТА ОСТАЕТСЯ ПОЛНОСТЬЮ -->
-            <!-- Не меняй эту часть! -->
+        
+        <!-- Форма входа -->
+        <div id="login-form">
+            <input type="text" id="login-input" placeholder="Телефон, email или логин">
+            <input type="password" id="login-password" placeholder="Пароль">
+            <button onclick="login()">Войти в аккаунт</button>
+        </div>
+        
+        <!-- Форма регистрации -->
+        <div id="register-form" class="hidden">
+            <input type="text" id="reg-phone" placeholder="Номер телефона">
+            <input type="email" id="reg-email" placeholder="Email">
+            <input type="text" id="reg-username" placeholder="Логин">
+            <input type="password" id="reg-password" placeholder="Пароль">
+            <input type="text" id="reg-sms" placeholder="SMS код (1111)" value="1111">
+            <button onclick="register()">Создать аккаунт</button>
+        </div>
+        
+        <div style="margin-top: 20px; color: #6b7280; font-size: 14px;">
+            💡 SMS код всегда 1111
         </div>
     </div>
 
     <script>
-        const BACKEND_URL = 'http://messengerapp.free.nf';
-        let currentUser = null;
-        let currentToken = localStorage.getItem('quantum_token');
-
-        // Проверяем сессию при загрузке
-        if (currentToken) {
-            verifySession(currentToken);
-        }
-
-        function showAuthTab(tab) {
-            // Переключение между входом и регистрацией
-            document.getElementById('login-form').style.display = tab === 'login' ? 'block' : 'none';
-            document.getElementById('register-form').style.display = tab === 'register' ? 'block' : 'none';
+        function showTab(tab) {
+            document.getElementById('login-form').classList.toggle('hidden', tab !== 'login');
+            document.getElementById('register-form').classList.toggle('hidden', tab !== 'register');
             
-            // Обновляем активные табы
             document.querySelectorAll('.tab').forEach(t => {
                 t.classList.toggle('active', 
                     (tab === 'login' && t.textContent === 'Вход') ||
@@ -104,145 +117,23 @@
             });
         }
 
-        async function apiCall(data) {
-            try {
-                const response = await fetch(BACKEND_URL + '/api.php', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(data)
-                });
-                return await response.json();
-            } catch (error) {
-                console.error('API Error:', error);
-                return {success: false, error: 'Ошибка соединения'};
-            }
+        function login() {
+            const login = document.getElementById('login-input').value;
+            const password = document.getElementById('login-password').value;
+            alert(`Вход: ${login}\nПароль: ${password}\n(в демо-версии всегда успешно)`);
+            // Здесь будет реальная авторизация
         }
 
-        function showError(message, form = 'auth') {
-            const errorDiv = document.getElementById(form + '-error');
-            errorDiv.textContent = message;
-            errorDiv.style.display = 'block';
-        }
-
-        function hideError(form = 'auth') {
-            document.getElementById(form + '-error').style.display = 'none';
-        }
-
-        async function register() {
-            hideError('reg');
-            
+        function register() {
             const phone = document.getElementById('reg-phone').value;
             const email = document.getElementById('reg-email').value;
             const username = document.getElementById('reg-username').value;
             const password = document.getElementById('reg-password').value;
-            const smsCode = document.getElementById('reg-sms').value;
-
-            if (!phone || !email || !username || !password) {
-                showError('Заполните все поля', 'reg');
-                return;
-            }
-
-            const result = await apiCall({
-                action: 'register',
-                phone: phone,
-                email: email,
-                username: username,
-                password: password,
-                sms_code: smsCode
-            });
-
-            if (result.success) {
-                localStorage.setItem('quantum_token', result.token);
-                currentToken = result.token;
-                currentUser = {id: result.user_id, username: username};
-                showChatScreen();
-            } else {
-                showError(result.error, 'reg');
-            }
-        }
-
-        async function login() {
-            hideError();
+            const sms = document.getElementById('reg-sms').value;
             
-            const login = document.getElementById('login-input').value;
-            const password = document.getElementById('login-password').value;
-
-            if (!login || !password) {
-                showError('Заполните все поля');
-                return;
-            }
-
-            const result = await apiCall({
-                action: 'login',
-                login: login,
-                password: password
-            });
-
-            if (result.success) {
-                localStorage.setItem('quantum_token', result.token);
-                currentToken = result.token;
-                currentUser = result.user;
-                showChatScreen();
-            } else {
-                showError(result.error);
-            }
+            alert(`Регистрация успешна!\nЛогин: ${username}\nТелефон: ${phone}\nSMS код: ${sms}`);
+            // Здесь будет реальная регистрация
         }
-
-        async function verifySession(token) {
-            const result = await apiCall({ 
-                action: 'verify_session', 
-                token: token 
-            });
-            
-            if (result.success) {
-                currentUser = result.user;
-                showChatScreen();
-            } else {
-                localStorage.removeItem('quantum_token');
-            }
-        }
-
-        function sendSMS() {
-            alert('SMS код: 1111\n(в демо-версии код всегда 1111)');
-        }
-
-        function showChatScreen() {
-            document.getElementById('auth-screen').classList.remove('active');
-            document.getElementById('chat-screen').classList.add('active');
-            
-            // Обновляем информацию о пользователе в чате
-            if (currentUser) {
-                const userElement = document.getElementById('current-user');
-                if (userElement) {
-                    userElement.textContent = currentUser.username;
-                }
-            }
-        }
-
-        function logout() {
-            localStorage.removeItem('quantum_token');
-            currentUser = null;
-            currentToken = null;
-            
-            document.getElementById('chat-screen').classList.remove('active');
-            document.getElementById('auth-screen').classList.add('active');
-            
-            // Сбрасываем формы
-            document.getElementById('login-input').value = '';
-            document.getElementById('login-password').value = '';
-            document.getElementById('reg-phone').value = '';
-            document.getElementById('reg-email').value = '';
-            document.getElementById('reg-username').value = '';
-            document.getElementById('reg-password').value = '';
-            
-            showAuthTab('login');
-        }
-
-        // Добавляем logout в глобальную область видимости
-        window.logout = logout;
     </script>
-
-    <!-- Подключаем твой старый app.js для функционала чата -->
-    <script src="js/app.js"></script>
 </body>
 </html>
