@@ -3,38 +3,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quantum Messenger - Глобальный чат</title>
+    <title>Quantum Messenger</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
     <div id="app">
-        <!-- Экран входа/регистрации -->
+        <!-- Экран входа -->
         <div id="auth-screen" class="screen active">
             <div class="container">
                 <div class="logo">
-                    <h1>🌌 Quantum Messenger</h1>
-                    <p class="subtitle">Глобальный мессенджер</p>
+                    <h1><i class="fas fa-atom"></i> Quantum</h1>
+                    <p class="subtitle">Мессенджер для реальных людей</p>
                 </div>
                 <div class="auth-form">
-                    <h2 id="auth-title">Вход в систему</h2>
+                    <h2 id="auth-title">Добро пожаловать</h2>
                     <div id="auth-error" class="error-message" style="display: none;"></div>
                     
-                    <input type="text" id="username" placeholder="Имя пользователя" autocomplete="username">
-                    <input type="email" id="email" placeholder="Email" style="display: none;" autocomplete="email">
-                    <input type="password" id="password" placeholder="Пароль" autocomplete="current-password">
+                    <input type="text" id="username" placeholder="Придумай свой никнейм" autocomplete="username">
+                    <input type="email" id="email" placeholder="Email (необязательно)" style="display: none;">
                     
-                    <button id="auth-button" class="btn-primary">Войти</button>
-                    <p id="auth-switch">Нет аккаунта? <a href="#" onclick="switchAuth()">Зарегистрироваться</a></p>
+                    <button id="auth-button" class="btn-primary">
+                        <i class="fas fa-rocket"></i> Начать общение
+                    </button>
+                    <p id="auth-switch" style="display: none;">Нет аккаунта? <a href="#" onclick="switchAuth()">Зарегистрироваться</a></p>
                 </div>
                 
-                <div class="demo-users">
-                    <p>Быстрый вход (тестовые пользователи):</p>
-                    <div class="demo-buttons">
-                        <button onclick="quickLogin('Иван')" class="btn-demo">Иван</button>
-                        <button onclick="quickLogin('Мария')" class="btn-demo">Мария</button>
-                        <button onclick="quickLogin('Алексей')" class="btn-demo">Алексей</button>
-                        <button onclick="quickLogin('Анна')" class="btn-demo">Анна</button>
+                <div class="features-preview">
+                    <div class="feature-item">
+                        <i class="fas fa-user-friends"></i>
+                        <span>Только реальные пользователи</span>
                     </div>
+                    <div class="feature-item">
+                        <i class="fas fa-shield-alt"></i>
+                        <span>Общение только с друзьями</span>
+                    </div>
+                    <div class="feature-item">
+                        <i class="fas fa-cog"></i>
+                        <span>Настройки профиля</span>
+                    </div>
+                </div>
+
+                <div class="changelog">
+                    <h4>🚀 Quantum 4.0 - Что нового:</h4>
+                    <ul>
+                        <li>✅ Полная система друзей и заявок</li>
+                        <li>✅ Редактирование профиля и аватара</li>
+                        <li>✅ Настройки языка и часового пояса</li>
+                        <li>✅ Только реальные пользователи</li>
+                        <li>✅ Общение только с друзьями</li>
+                        <li>✅ Умные уведомления</li>
+                        <li>✅ Статистика активности</li>
+                        <li>✅ Улучшенный интерфейс</li>
+                    </ul>
                 </div>
             </div>
         </div>
@@ -42,63 +63,443 @@
         <!-- Экран чата -->
         <div id="chat-screen" class="screen">
             <div class="chat-container">
+                <!-- Верхняя панель -->
                 <div class="chat-header">
                     <div class="header-left">
-                        <h2>🌌 Quantum</h2>
+                        <h2><i class="fas fa-atom"></i> Quantum</h2>
                         <span class="online-count" id="online-count">0 онлайн</span>
                     </div>
-                    <div class="user-info">
-                        <span id="current-user"></span>
-                        <button onclick="logout()" class="logout-btn">Выйти</button>
+                    <div class="header-right">
+                        <div class="notifications">
+                            <button class="btn-icon" onclick="showNotifications()" title="Уведомления">
+                                <i class="fas fa-bell"></i>
+                                <span class="notification-badge" id="notification-badge" style="display: none;">0</span>
+                            </button>
+                        </div>
+                        <div class="user-menu">
+                            <img id="user-avatar" src="" class="avatar-small">
+                            <span id="current-user"></span>
+                            <div class="status-indicator online" id="user-status-indicator"></div>
+                            <div class="dropdown">
+                                <button class="btn-icon" onclick="toggleDropdown(event)">
+                                    <i class="fas fa-chevron-down"></i>
+                                </button>
+                                <div class="dropdown-menu" id="user-dropdown">
+                                    <a href="#" onclick="showProfile()"><i class="fas fa-user-edit"></i> Мой профиль</a>
+                                    <a href="#" onclick="showPendingRequests()"><i class="fas fa-user-clock"></i> Заявки в друзья</a>
+                                    <a href="#" onclick="showFriends()"><i class="fas fa-users"></i> Мои друзья</a>
+                                    <div class="dropdown-divider"></div>
+                                    <a href="#" onclick="updateStatus('online')"><i class="fas fa-circle online"></i> Online</a>
+                                    <a href="#" onclick="updateStatus('away')"><i class="fas fa-clock away"></i> Отошел</a>
+                                    <a href="#" onclick="updateStatus('dnd')"><i class="fas fa-minus-circle dnd"></i> Не беспокоить</a>
+                                    <div class="dropdown-divider"></div>
+                                    <a href="#" onclick="showSettings()"><i class="fas fa-cog"></i> Настройки</a>
+                                    <a href="#" onclick="showStats()"><i class="fas fa-chart-bar"></i> Статистика</a>
+                                    <div class="dropdown-divider"></div>
+                                    <a href="#" onclick="logout()" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Выйти</a>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 
                 <div class="chat-content">
-                    <div class="users-sidebar">
-                        <div class="sidebar-header">
-                            <h3>Пользователи</h3>
-                            <div class="search-box">
-                                <input type="text" id="user-search" placeholder="Поиск..." onkeyup="searchUsers()">
+                    <!-- Боковая панель -->
+                    <div class="sidebar">
+                        <div class="sidebar-tabs">
+                            <button class="tab-button active" onclick="showTab('friends')" data-tab="friends">
+                                <i class="fas fa-users"></i>
+                                <span>Друзья</span>
+                            </button>
+                            <button class="tab-button" onclick="showTab('chats')" data-tab="chats">
+                                <i class="fas fa-comments"></i>
+                                <span>Чаты</span>
+                            </button>
+                            <button class="tab-button" onclick="showTab('search')" data-tab="search">
+                                <i class="fas fa-search"></i>
+                                <span>Поиск</span>
+                            </button>
+                            <button class="tab-button" onclick="showTab('requests')" data-tab="requests">
+                                <i class="fas fa-user-plus"></i>
+                                <span>Заявки</span>
+                            </button>
+                        </div>
+                        
+                        <!-- Вкладка Друзья -->
+                        <div class="tab-content active" id="friends-tab">
+                            <div class="sidebar-header">
+                                <h3>Мои друзья</h3>
+                                <div class="friends-stats">
+                                    <span class="online-count-small" id="friends-online">0</span>
+                                    <span class="total-count-small" id="friends-total">0</span>
+                                </div>
+                            </div>
+                            <div class="friends-list" id="friends-list">
+                                <div class="empty-state">
+                                    <i class="fas fa-users"></i>
+                                    <p>У вас пока нет друзей</p>
+                                    <button class="btn-secondary" onclick="showTab('search')" style="margin-top: 1rem;">
+                                        Найти друзей
+                                    </button>
+                                </div>
                             </div>
                         </div>
                         
-                        <div class="users-list" id="users-list">
-                            <div class="loading">Загрузка пользователей...</div>
+                        <!-- Вкладка Чаты -->
+                        <div class="tab-content" id="chats-tab">
+                            <div class="sidebar-header">
+                                <h3>Чаты</h3>
+                                <button class="btn-icon" onclick="startNewChat()" title="Новый чат">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                            </div>
+                            <div class="chats-list" id="chats-list">
+                                <div class="empty-state">
+                                    <i class="fas fa-comments"></i>
+                                    <p>Начните общение с другом</p>
+                                    <p class="small-text">Чаты появятся здесь автоматически</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Вкладка Поиск -->
+                        <div class="tab-content" id="search-tab">
+                            <div class="sidebar-header">
+                                <h3>Найти друзей</h3>
+                            </div>
+                            <div class="search-box">
+                                <input type="text" id="global-search" placeholder="Введите имя пользователя..." onkeyup="searchUsers()">
+                                <i class="fas fa-search search-icon"></i>
+                            </div>
+                            <div class="search-results" id="search-results">
+                                <div class="empty-state">
+                                    <i class="fas fa-search"></i>
+                                    <p>Начните вводить имя пользователя</p>
+                                    <p class="small-text">Минимум 2 символа</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Вкладка Заявки -->
+                        <div class="tab-content" id="requests-tab">
+                            <div class="sidebar-header">
+                                <h3>Заявки в друзья</h3>
+                                <button class="btn-icon" onclick="refreshRequests()" title="Обновить">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
+                            </div>
+                            <div class="requests-list" id="requests-list">
+                                <div class="empty-state">
+                                    <i class="fas fa-user-clock"></i>
+                                    <p>Нет pending заявок</p>
+                                    <p class="small-text">Заявки появятся здесь</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     
+                    <!-- Область чата -->
                     <div class="chat-area">
                         <div id="chat-header">
-                            <div id="selected-user-info">
-                                <div class="selected-user">
-                                    <span id="selected-user-name">Выберите пользователя для чата</span>
-                                    <span id="user-status" class="status-offline"></span>
+                            <div id="selected-chat-info">
+                                <div class="chat-info">
+                                    <img id="chat-avatar" src="" class="avatar">
+                                    <div class="chat-details">
+                                        <span id="selected-chat-name">Quantum Messenger</span>
+                                        <span id="chat-status" class="status">Выберите друга для общения</span>
+                                    </div>
+                                </div>
+                                <div class="chat-actions">
+                                    <button class="btn-icon" onclick="showChatInfo()" title="Информация о чате">
+                                        <i class="fas fa-info-circle"></i>
+                                    </button>
+                                    <button class="btn-icon" onclick="clearChat()" title="Очистить чат">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
                                 </div>
                             </div>
                         </div>
                         
                         <div id="messages-container">
                             <div class="welcome-message">
-                                <div class="welcome-icon">💬</div>
-                                <h3>Добро пожаловать в Quantum Messenger!</h3>
-                                <p>Выберите пользователя из списка слева чтобы начать общение</p>
-                                <div class="features">
-                                    <div class="feature">🌍 Глобальный доступ</div>
-                                    <div class="feature">⚡ Сообщения в реальном времени</div>
-                                    <div class="feature">🔐 Безопасное соединение</div>
+                                <div class="welcome-icon">
+                                    <i class="fas fa-atom"></i>
+                                </div>
+                                <h3>Добро пожаловать в Quantum 4.0!</h3>
+                                <p>Мессенджер для реальных людей</p>
+                                <div class="welcome-features">
+                                    <div class="feature">
+                                        <i class="fas fa-user-friends"></i>
+                                        <span>Только друзья</span>
+                                    </div>
+                                    <div class="feature">
+                                        <i class="fas fa-shield-alt"></i>
+                                        <span>Безопасное общение</span>
+                                    </div>
+                                    <div class="feature">
+                                        <i class="fas fa-cog"></i>
+                                        <span>Персональные настройки</span>
+                                    </div>
+                                </div>
+                                <div class="quick-actions">
+                                    <button class="btn-primary" onclick="showTab('search')">
+                                        <i class="fas fa-user-plus"></i> Найти друзей
+                                    </button>
+                                    <button class="btn-secondary" onclick="showProfile()">
+                                        <i class="fas fa-user-edit"></i> Настроить профиль
+                                    </button>
                                 </div>
                             </div>
                         </div>
                         
                         <div class="message-input" style="display: none;" id="message-input-area">
-                            <input type="text" id="message-text" placeholder="Введите сообщение...">
-                            <button onclick="sendMessage()" id="send-button" class="btn-primary">Отправить</button>
+                            <div class="input-actions">
+                                <button class="btn-icon" onclick="toggleEmojiPicker()" title="Эмодзи">
+                                    <i class="far fa-smile"></i>
+                                </button>
+                                <button class="btn-icon" onclick="showFileOptions()" title="Прикрепить файл">
+                                    <i class="far fa-file"></i>
+                                </button>
+                                <button class="btn-icon" onclick="showMoreOptions()" title="Еще опции">
+                                    <i class="fas fa-ellipsis-h"></i>
+                                </button>
+                            </div>
+                            <input type="text" id="message-text" placeholder="Напишите сообщение другу..." onkeypress="handleKeyPress(event)">
+                            <button onclick="sendMessage()" id="send-button" class="btn-primary" title="Отправить">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                        
+                        <!-- Эмодзи пикер -->
+                        <div class="emoji-picker" id="emoji-picker" style="display: none;">
+                            <div class="emoji-header">
+                                <span>Выберите эмодзи</span>
+                                <button class="btn-icon" onclick="toggleEmojiPicker()">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            <div class="emoji-category">
+                                <span>Часто используемые</span>
+                                <div class="emoji-row">
+                                    <span onclick="addEmoji('😀')">😀</span>
+                                    <span onclick="addEmoji('😂')">😂</span>
+                                    <span onclick="addEmoji('❤️')">❤️</span>
+                                    <span onclick="addEmoji('👍')">👍</span>
+                                    <span onclick="addEmoji('🔥')">🔥</span>
+                                    <span onclick="addEmoji('🎉')">🎉</span>
+                                    <span onclick="addEmoji('🙏')">🙏</span>
+                                    <span onclick="addEmoji('💯')">💯</span>
+                                </div>
+                            </div>
+                            <div class="emoji-category">
+                                <span>Смайлики</span>
+                                <div class="emoji-row">
+                                    <span onclick="addEmoji('😊')">😊</span>
+                                    <span onclick="addEmoji('😎')">😎</span>
+                                    <span onclick="addEmoji('🥰')">🥰</span>
+                                    <span onclick="addEmoji('😅')">😅</span>
+                                    <span onclick="addEmoji('🤔')">🤔</span>
+                                    <span onclick="addEmoji('😴')">😴</span>
+                                    <span onclick="addEmoji('😡')">😡</span>
+                                    <span onclick="addEmoji('🤯')">🤯</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+
+    <!-- Модальные окна -->
+    <div id="modal-overlay" class="modal-overlay" style="display: none;" onclick="closeModal()">
+        <!-- Модальное окно профиля -->
+        <div class="modal" id="profile-modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3><i class="fas fa-user-edit"></i> Мой профиль</h3>
+                <button class="btn-icon" onclick="closeModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="profile-avatar-section">
+                    <img id="profile-avatar" src="" class="avatar-large">
+                    <div class="avatar-actions">
+                        <button class="btn-secondary" onclick="changeAvatar()">
+                            <i class="fas fa-camera"></i> Сменить аватар
+                        </button>
+                        <button class="btn-secondary" onclick="randomAvatar()">
+                            <i class="fas fa-random"></i> Случайный
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-user"></i> Имя пользователя</label>
+                    <input type="text" id="profile-username" placeholder="Ваш уникальный никнейм">
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-envelope"></i> Email</label>
+                    <input type="email" id="profile-email" placeholder="your@email.com">
+                    <div class="form-hint">Для восстановления доступа</div>
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-edit"></i> О себе</label>
+                    <textarea id="profile-bio" placeholder="Расскажите о себе..." rows="3"></textarea>
+                    <div class="form-hint">Максимум 200 символов</div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-language"></i> Язык</label>
+                        <select id="profile-language">
+                            <option value="ru">Русский</option>
+                            <option value="en">English</option>
+                            <option value="es">Español</option>
+                            <option value="de">Deutsch</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label><i class="fas fa-clock"></i> Часовой пояс</label>
+                        <select id="profile-timezone">
+                            <option value="Europe/Moscow">Москва (+3)</option>
+                            <option value="Europe/London">Лондон (+0)</option>
+                            <option value="America/New_York">Нью-Йорк (-5)</option>
+                            <option value="Asia/Tokyo">Токио (+9)</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="profile-stats">
+                    <h4><i class="fas fa-chart-bar"></i> Статистика профиля</h4>
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <span class="stat-number" id="stat-friends">0</span>
+                            <span class="stat-label">Друзей</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number" id="stat-messages">0</span>
+                            <span class="stat-label">Сообщений</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number" id="stat-online">0</span>
+                            <span class="stat-label">Друзей онлайн</span>
+                        </div>
+                    </div>
+                    <div class="profile-info">
+                        <div class="info-item">
+                            <i class="fas fa-calendar"></i>
+                            <span>Зарегистрирован: <span id="profile-joined">-</span></span>
+                        </div>
+                        <div class="info-item">
+                            <i class="fas fa-clock"></i>
+                            <span>Последняя активность: <span id="profile-last-active">-</span></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeModal()">Отмена</button>
+                <button class="btn-primary" onclick="saveProfile()">
+                    <i class="fas fa-save"></i> Сохранить изменения
+                </button>
+            </div>
+        </div>
+
+        <!-- Модальное окно уведомлений -->
+        <div class="modal" id="notifications-modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3><i class="fas fa-bell"></i> Уведомления</h3>
+                <button class="btn-icon" onclick="closeModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="notifications-list" id="notifications-list">
+                    <div class="empty-state">
+                        <i class="fas fa-bell-slash"></i>
+                        <p>Уведомлений нет</p>
+                        <p class="small-text">Здесь появятся ваши уведомления</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Модальное окно статистики -->
+        <div class="modal" id="stats-modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3><i class="fas fa-chart-line"></i> Статистика Quantum</h3>
+                <button class="btn-icon" onclick="closeModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="stats-overview">
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-number" id="stats-total-users">0</div>
+                            <div class="stat-label">Всего пользователей</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon online">
+                            <i class="fas fa-circle"></i>
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-number" id="stats-online-users">0</div>
+                            <div class="stat-label">Сейчас онлайн</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-comments"></i>
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-number" id="stats-total-messages">0</div>
+                            <div class="stat-label">Всего сообщений</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-handshake"></i>
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-number" id="stats-friendships">0</div>
+                            <div class="stat-label">Дружеских связей</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="activity-chart">
+                    <h4>Активность за сегодня</h4>
+                    <div class="chart-placeholder">
+                        <i class="fas fa-chart-bar"></i>
+                        <p>График активности</p>
+                        <div class="chart-bars">
+                            <div class="bar" style="height: 60%"></div>
+                            <div class="bar" style="height: 80%"></div>
+                            <div class="bar" style="height: 45%"></div>
+                            <div class="bar" style="height: 90%"></div>
+                            <div class="bar" style="height: 70%"></div>
+                            <div class="bar" style="height: 85%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Всплывающие уведомления -->
+    <div id="notification-toast" class="notification-toast"></div>
+
+    <!-- Контекстное меню -->
+    <div id="context-menu" class="context-menu"></div>
 
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script src="js/app.js"></script>
