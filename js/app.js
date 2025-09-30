@@ -4,13 +4,9 @@ let selectedChat = null;
 let allMessages = [];
 let allUsers = [];
 let friends = [];
-let groups = [];
 let notifications = [];
 
-const BACKEND_URL = 'https://quantum-backend-yi39.onrender.com';
-
-// Эмодзи для реакций
-const EMOJIS = ['😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇', '❤️', '👍', '👎', '🔥', '⭐', '🎉', '🙏', '💯', '👏', '🙌'];
+const BACKEND_URL = 'http://localhost:5000';
 
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🌌 Quantum Messenger started');
@@ -18,7 +14,6 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function initializeApp() {
-    // Подключаемся к серверу
     socket = io(BACKEND_URL);
     
     socket.on('connect', () => {
@@ -30,7 +25,6 @@ function initializeApp() {
     socket.on('connect_error', (error) => {
         console.error('❌ Connection error:', error);
         showError('Ошибка подключения к серверу');
-        showNotification('Ошибка подключения', 'error');
     });
     
     // Обработчики событий
@@ -46,39 +40,24 @@ function initializeApp() {
         console.log('👥 Users list:', users.length);
         allUsers = users;
         updateOnlineCount();
-        renderUsersList();
     });
     
     socket.on('friendsList', (friendsList) => {
         console.log('🤝 Friends list:', friendsList.length);
         friends = friendsList;
         renderFriendsList();
-        renderGroupsTab();
-    });
-    
-    socket.on('groupsList', (groupsList) => {
-        console.log('👥 Groups list:', groupsList.length);
-        groups = groupsList;
-        renderGroupsList();
+        updateFriendsStats();
     });
     
     socket.on('newMessage', (message) => {
         console.log('💬 New message:', message);
         allMessages.push(message);
         
-        if (selectedChat && (
-            (selectedChat.type === 'user' && selectedChat.id === message.senderId) ||
-            (selectedChat.type === 'group' && selectedChat.id === message.groupId)
-        )) {
+        if (selectedChat && selectedChat.id === message.senderId) {
             displayMessage(message);
-        } else {
-            // Показать уведомление о новом сообщении
-            if (message.senderId !== currentUser.id) {
-                showNotification(`Новое сообщение от ${message.senderName}`, 'info');
-            }
+        } else if (message.senderId !== currentUser.id) {
+            showNotification(`Новое сообщение от ${message.senderName}`, 'info');
         }
-        
-        updateChatsList();
     });
     
     socket.on('messageHistory', (messages) => {
@@ -89,16 +68,6 @@ function initializeApp() {
         }
     });
     
-    socket.on('messageUpdated', (message) => {
-        const index = allMessages.findIndex(m => m.id === message.id);
-        if (index > -1) {
-            allMessages[index] = message;
-            if (selectedChat) {
-                displayChatHistory();
-            }
-        }
-    });
-    
     socket.on('searchResults', (results) => {
         renderSearchResults(results);
     });
@@ -106,11 +75,7 @@ function initializeApp() {
     socket.on('friendRequest', (data) => {
         console.log('📩 Friend request from:', data.from.username);
         showNotification(`${data.from.username} отправил запрос в друзья`, 'info');
-        renderFriendsList();
-    });
-    
-    socket.on('friendRequestSent', (friend) => {
-        showNotification(`Запрос в друзья отправлен ${friend.username}`, 'success');
+        refreshRequests();
     });
     
     socket.on('friendAccepted', (friend) => {
@@ -119,23 +84,15 @@ function initializeApp() {
         renderFriendsList();
     });
     
-    socket.on('groupCreated', (group) => {
-        console.log('👥 Group created:', group.name);
-        groups.push(group);
-        renderGroupsList();
-        showNotification(`Вы добавлены в группу "${group.name}"`, 'success');
-    });
-    
     socket.on('userStatusUpdate', (user) => {
         const index = allUsers.findIndex(u => u.id === user.id);
         if (index > -1) {
             allUsers[index] = user;
         }
         updateOnlineCount();
-        renderUsersList();
         renderFriendsList();
         
-        if (selectedChat && selectedChat.type === 'user' && selectedChat.id === user.id) {
+        if (selectedChat && selectedChat.id === user.id) {
             updateChatStatus(user);
         }
     });
@@ -144,10 +101,12 @@ function initializeApp() {
         console.log('🔔 New notification:', notification);
         notifications.push(notification);
         updateNotificationBadge();
-        showNotification(notification.message, 'info');
     });
     
-    // Настройка кнопок
+    socket.on('pendingRequests', (requests) => {
+        renderPendingRequests(requests);
+    });
+
     setupEventListeners();
 }
 
@@ -157,7 +116,6 @@ function setupEventListeners() {
         if (e.key === 'Enter') handleAuth();
     });
     
-    // Закрытие dropdown при клике вне его
     document.addEventListener('click', (e) => {
         if (!e.target.closest('.dropdown')) {
             closeAllDropdowns();
@@ -180,12 +138,10 @@ function handleAuth() {
     
     hideError();
     
-    // Показываем загрузку
     const authButton = document.getElementById('auth-button');
     authButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Подключение...';
     authButton.disabled = true;
     
-    // Простой вход - работает всегда
     socket.emit('login', { username: username });
 }
 
@@ -201,8 +157,6 @@ function hideError() {
 }
 
 function showChatScreen() {
-    console.log('🔄 Showing chat screen');
-    
     document.getElementById('auth-screen').classList.remove('active');
     document.getElementById('chat-screen').classList.add('active');
     
@@ -212,8 +166,10 @@ function showChatScreen() {
 
 function updateUserAvatar() {
     const avatar = document.getElementById('user-avatar');
+    const profileAvatar = document.getElementById('profile-avatar');
     if (currentUser.avatar) {
         avatar.src = currentUser.avatar;
+        if (profileAvatar) profileAvatar.src = currentUser.avatar;
     }
 }
 
@@ -225,9 +181,16 @@ function updateOnlineCount() {
     }
 }
 
+function updateFriendsStats() {
+    const onlineFriends = friends.filter(f => f.isOnline).length;
+    document.getElementById('friends-online').textContent = onlineFriends;
+    document.getElementById('friends-total').textContent = friends.length;
+    document.getElementById('stat-friends').textContent = friends.length;
+    document.getElementById('stat-online').textContent = onlineFriends;
+}
+
 // Система вкладок
 function showTab(tabName) {
-    // Скрываем все вкладки
     document.querySelectorAll('.tab-content').forEach(tab => {
         tab.classList.remove('active');
     });
@@ -235,27 +198,12 @@ function showTab(tabName) {
         btn.classList.remove('active');
     });
     
-    // Показываем выбранную вкладку
     document.getElementById(`${tabName}-tab`).classList.add('active');
     document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
     
-    // Загружаем данные для вкладки
-    switch(tabName) {
-        case 'friends':
-            socket.emit('getFriends');
-            break;
-        case 'groups':
-            socket.emit('getGroups');
-            break;
-        case 'chats':
-            updateChatsList();
-            break;
+    if (tabName === 'requests') {
+        refreshRequests();
     }
-}
-
-// Рендеринг списков
-function renderUsersList() {
-    // Эта функция будет обновлять список в поиске
 }
 
 function renderFriendsList() {
@@ -267,7 +215,7 @@ function renderFriendsList() {
             <div class="empty-state">
                 <i class="fas fa-users"></i>
                 <p>У вас пока нет друзей</p>
-                <button class="btn-secondary" onclick="showAddFriend()" style="margin-top: 1rem;">
+                <button class="btn-secondary" onclick="showTab('search')" style="margin-top: 1rem;">
                     Найти друзей
                 </button>
             </div>
@@ -277,7 +225,7 @@ function renderFriendsList() {
     
     friendsList.innerHTML = friends.map(friend => `
         <div class="friend-item" onclick="selectUserChat('${friend.id}')">
-            <img src="${friend.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(friend.username)}&background=667eea&color=fff`}" class="avatar">
+            <img src="${friend.avatar}" class="avatar">
             <div class="friend-info">
                 <div class="friend-name">${friend.username}</div>
                 <div class="friend-status ${friend.isOnline ? 'online' : 'offline'}">
@@ -287,34 +235,8 @@ function renderFriendsList() {
             <div class="status-indicator ${friend.isOnline ? 'online' : 'offline'}"></div>
         </div>
     `).join('');
-}
-
-function renderGroupsList() {
-    const groupsList = document.getElementById('groups-list');
-    if (!groupsList) return;
     
-    if (groups.length === 0) {
-        groupsList.innerHTML = `
-            <div class="empty-state">
-                <i class="fas fa-layer-group"></i>
-                <p>У вас пока нет групп</p>
-                <button class="btn-secondary" onclick="showCreateGroup()" style="margin-top: 1rem;">
-                    Создать группу
-                </button>
-            </div>
-        `;
-        return;
-    }
-    
-    groupsList.innerHTML = groups.map(group => `
-        <div class="group-item" onclick="selectGroupChat('${group.id}')">
-            <img src="${group.avatar}" class="avatar">
-            <div class="group-info">
-                <div class="group-name">${group.name}</div>
-                <div class="group-members">${group.members.length} участников</div>
-            </div>
-        </div>
-    `).join('');
+    updateFriendsStats();
 }
 
 function renderSearchResults(results) {
@@ -333,7 +255,7 @@ function renderSearchResults(results) {
     
     searchResults.innerHTML = results.map(user => `
         <div class="search-item">
-            <img src="${user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username)}&background=667eea&color=fff`}" class="avatar">
+            <img src="${user.avatar}" class="avatar">
             <div class="search-info">
                 <div class="search-name">${user.username}</div>
                 <div class="search-status ${user.isOnline ? 'online' : 'offline'}">
@@ -349,6 +271,39 @@ function renderSearchResults(results) {
                         <i class="fas fa-user-plus"></i> Добавить
                     </button>`
                 }
+            </div>
+        </div>
+    `).join('');
+}
+
+function renderPendingRequests(requests) {
+    const requestsList = document.getElementById('requests-list');
+    if (!requestsList) return;
+    
+    if (requests.length === 0) {
+        requestsList.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-user-clock"></i>
+                <p>Нет заявок в друзья</p>
+            </div>
+        `;
+        return;
+    }
+    
+    requestsList.innerHTML = requests.map(request => `
+        <div class="request-item">
+            <img src="${request.user.avatar}" class="avatar">
+            <div class="request-info">
+                <div class="request-name">${request.user.username}</div>
+                <div class="request-time">${formatTime(request.friendship.createdAt)}</div>
+            </div>
+            <div class="request-actions">
+                <button class="btn-success btn-small" onclick="acceptFriend('${request.friendship.id}')">
+                    <i class="fas fa-check"></i>
+                </button>
+                <button class="btn-danger btn-small" onclick="rejectFriend('${request.friendship.id}')">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
         </div>
     `).join('');
@@ -372,32 +327,20 @@ function searchUsers() {
 }
 
 // Работа с друзьями
-function showAddFriend() {
-    // Просто переключаем на вкладку поиска
-    showTab('search');
-    document.getElementById('global-search').focus();
-}
-
 function addFriend(friendId) {
     socket.emit('addFriend', friendId);
 }
 
-// Работа с группами
-function showCreateGroup() {
-    // В упрощенной версии создаем группу сразу
-    const groupName = prompt('Введите название группы:');
-    if (groupName && groupName.trim()) {
-        createGroup(groupName.trim());
-    }
+function acceptFriend(friendshipId) {
+    socket.emit('acceptFriend', friendshipId);
 }
 
-function createGroup(groupName) {
-    // В упрощенной версии создаем группу только с текущим пользователем
-    socket.emit('createGroup', {
-        name: groupName,
-        members: [], // Только создатель
-        description: ''
-    });
+function rejectFriend(friendshipId) {
+    socket.emit('rejectFriend', friendshipId);
+}
+
+function refreshRequests() {
+    socket.emit('getPendingRequests');
 }
 
 // Выбор чатов
@@ -415,40 +358,16 @@ function selectUserChat(userId) {
     showChat();
 }
 
-function selectGroupChat(groupId) {
-    const group = groups.find(g => g.id === groupId);
-    if (!group) return;
-    
-    selectedChat = {
-        type: 'group',
-        id: groupId,
-        name: group.name,
-        avatar: group.avatar
-    };
-    
-    showChat();
-}
-
 function showChat() {
     if (!selectedChat) return;
     
-    // Обновляем заголовок чата
     document.getElementById('selected-chat-name').textContent = selectedChat.name;
     document.getElementById('chat-avatar').src = selectedChat.avatar;
     
-    // Обновляем статус
-    if (selectedChat.type === 'user') {
-        const user = allUsers.find(u => u.id === selectedChat.id);
-        updateChatStatus(user);
-    } else {
-        document.getElementById('chat-status').textContent = 'Групповой чат';
-        document.getElementById('chat-status').className = 'status';
-    }
+    const user = allUsers.find(u => u.id === selectedChat.id);
+    updateChatStatus(user);
     
-    // Показываем поле ввода
     document.getElementById('message-input-area').style.display = 'flex';
-    
-    // Показываем историю сообщений
     displayChatHistory();
 }
 
@@ -467,18 +386,11 @@ function displayChatHistory() {
     const container = document.getElementById('messages-container');
     container.innerHTML = '';
     
-    let chatMessages = [];
+    const chatMessages = allMessages.filter(msg => 
+        (msg.senderId === currentUser.id && msg.receiverId === selectedChat.id) ||
+        (msg.senderId === selectedChat.id && msg.receiverId === currentUser.id)
+    );
     
-    if (selectedChat.type === 'user') {
-        chatMessages = allMessages.filter(msg => 
-            (msg.senderId === currentUser.id && msg.receiverId === selectedChat.id) ||
-            (msg.senderId === selectedChat.id && msg.receiverId === currentUser.id)
-        );
-    } else {
-        chatMessages = allMessages.filter(msg => msg.groupId === selectedChat.id);
-    }
-    
-    // Сортируем по времени
     chatMessages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
     
     if (chatMessages.length === 0) {
@@ -487,7 +399,7 @@ function displayChatHistory() {
                 <div class="welcome-icon">
                     <i class="fas fa-comments"></i>
                 </div>
-                <h3>Начало переписки</h3>
+                <h3>Начало переписки с ${selectedChat.name}</h3>
                 <p>Напишите первое сообщение!</p>
             </div>
         `;
@@ -495,15 +407,12 @@ function displayChatHistory() {
     }
     
     chatMessages.forEach(message => displayMessage(message));
-    
-    // Прокручиваем вниз
     container.scrollTop = container.scrollHeight;
 }
 
 function displayMessage(message) {
     const container = document.getElementById('messages-container');
     
-    // Убираем welcome сообщение если есть
     const welcomeMessage = container.querySelector('.welcome-message');
     if (welcomeMessage) {
         container.innerHTML = '';
@@ -518,35 +427,10 @@ function displayMessage(message) {
         hour: '2-digit', minute: '2-digit' 
     });
     
-    let messageHTML = '';
-    
-    if (message.type === 'system') {
-        messageElement.className = 'message-system';
-        messageHTML = `<div class="message-text">${message.text}</div>`;
-    } else {
-        messageHTML = `
-            ${!isOwnMessage && selectedChat.type === 'group' ? 
-                `<div class="message-sender">${message.senderName}</div>` : ''}
-            <div class="message-text">${message.text}</div>
-            ${message.reactions && message.reactions.length > 0 ? `
-                <div class="message-reactions">
-                    ${message.reactions.map(reaction => 
-                        `<span class="reaction" onclick="toggleReaction('${message.id}', '${reaction.emoji}')">
-                            ${reaction.emoji} ${reaction.count || ''}
-                        </span>`
-                    ).join('')}
-                </div>
-            ` : ''}
-            <div class="message-time">${time}</div>
-        `;
-    }
-    
-    messageElement.innerHTML = messageHTML;
-    messageElement.onclick = (e) => {
-        if (e.target.classList.contains('message-text')) {
-            showMessageActions(message.id);
-        }
-    };
+    messageElement.innerHTML = `
+        <div class="message-text">${message.text}</div>
+        <div class="message-time">${time}</div>
+    `;
     
     container.appendChild(messageElement);
     container.scrollTop = container.scrollHeight;
@@ -555,7 +439,7 @@ function displayMessage(message) {
 // Отправка сообщений
 function sendMessage() {
     if (!selectedChat) {
-        showNotification('Выберите чат для отправки сообщения', 'warning');
+        showNotification('Выберите друга для отправки сообщения', 'warning');
         return;
     }
     
@@ -566,14 +450,9 @@ function sendMessage() {
     
     const messageData = {
         text: text,
-        type: 'text'
+        type: 'text',
+        receiverId: selectedChat.id
     };
-    
-    if (selectedChat.type === 'user') {
-        messageData.receiverId = selectedChat.id;
-    } else {
-        messageData.groupId = selectedChat.id;
-    }
     
     socket.emit('sendMessage', messageData);
     textInput.value = '';
@@ -584,20 +463,6 @@ function handleKeyPress(event) {
         event.preventDefault();
         sendMessage();
     }
-}
-
-// Реакции на сообщения
-function toggleReaction(messageId, emoji) {
-    socket.emit('addReaction', {
-        messageId: messageId,
-        emoji: emoji
-    });
-}
-
-function showMessageActions(messageId) {
-    // В упрощенной версии просто показываем быстрые реакции
-    const quickReactions = ['👍', '❤️', '😂', '😮', '😢'];
-    showNotification('Нажмите на эмодзи для реакции', 'info');
 }
 
 // Эмодзи
@@ -613,36 +478,13 @@ function addEmoji(emoji) {
     toggleEmojiPicker();
 }
 
-// Файлы (упрощенная версия)
-function triggerFileUpload() {
-    document.getElementById('file-upload').click();
-}
-
-function handleFileUpload(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    
-    if (file.size > 40 * 1024 * 1024) { // 40MB
-        showNotification('Файл слишком большой (максимум 40MB)', 'error');
-        return;
-    }
-    
-    // В реальном приложении здесь была бы загрузка файла
-    showNotification(`Файл "${file.name}" готов к отправке`, 'info');
-    
-    if (selectedChat) {
-        const textInput = document.getElementById('message-text');
-        textInput.value = `[Файл: ${file.name}]`;
-    }
-}
-
 // Уведомления
 function showNotification(message, type = 'info') {
     const toast = document.getElementById('notification-toast');
-    const bgColor = type === 'error' ? 'var(--error-color)' : 
-                   type === 'success' ? 'var(--success-color)' : 
-                   type === 'warning' ? 'var(--warning-color)' : 
-                   'var(--primary-color)';
+    const bgColor = type === 'error' ? '#f56565' : 
+                   type === 'success' ? '#48bb78' : 
+                   type === 'warning' ? '#ed8936' : 
+                   '#667eea';
     
     toast.innerHTML = `
         <div style="border-left-color: ${bgColor}">
@@ -657,9 +499,8 @@ function showNotification(message, type = 'info') {
     }, 3000);
 }
 
-function toggleNotifications() {
-    // В упрощенной версии просто показываем уведомление
-    showNotification('Уведомления работают в реальном времени', 'info');
+function showNotifications() {
+    showModal('notifications-modal');
 }
 
 function updateNotificationBadge() {
@@ -672,6 +513,56 @@ function updateNotificationBadge() {
     } else {
         badge.style.display = 'none';
     }
+}
+
+// Профиль и настройки
+function showProfile() {
+    if (!currentUser) return;
+    
+    document.getElementById('profile-username').value = currentUser.username;
+    document.getElementById('profile-email').value = currentUser.email || '';
+    document.getElementById('profile-bio').value = currentUser.bio || '';
+    document.getElementById('profile-language').value = currentUser.language || 'ru';
+    document.getElementById('profile-timezone').value = currentUser.timezone || 'Europe/Moscow';
+    
+    document.getElementById('profile-joined').textContent = formatDate(currentUser.createdAt);
+    document.getElementById('profile-last-active').textContent = formatDate(currentUser.lastActive);
+    document.getElementById('stat-messages').textContent = allMessages.filter(m => 
+        m.senderId === currentUser.id
+    ).length;
+    
+    showModal('profile-modal');
+}
+
+function saveProfile() {
+    const profileData = {
+        username: document.getElementById('profile-username').value,
+        email: document.getElementById('profile-email').value,
+        bio: document.getElementById('profile-bio').value,
+        language: document.getElementById('profile-language').value,
+        timezone: document.getElementById('profile-timezone').value
+    };
+    
+    socket.emit('updateProfile', profileData);
+    closeModal();
+    showNotification('Профиль успешно обновлен', 'success');
+}
+
+function changeAvatar() {
+    const avatars = [
+        'https://ui-avatars.com/api/?name=' + encodeURIComponent(currentUser.username) + '&background=667eea&color=fff&bold=true',
+        'https://api.dicebear.com/7.x/avataaars/svg?seed=' + currentUser.username,
+        'https://api.dicebear.com/7.x/micah/svg?seed=' + currentUser.username
+    ];
+    
+    const randomAvatar = avatars[Math.floor(Math.random() * avatars.length)];
+    currentUser.avatar = randomAvatar;
+    updateUserAvatar();
+    showNotification('Аватар обновлен', 'success');
+}
+
+function randomAvatar() {
+    changeAvatar();
 }
 
 // Статусы
@@ -691,6 +582,30 @@ function getStatusText(status) {
     return statusMap[status] || status;
 }
 
+// Модальные окна
+function showModal(modalId) {
+    document.getElementById('modal-overlay').style.display = 'flex';
+    document.querySelectorAll('.modal').forEach(modal => {
+        modal.style.display = 'none';
+    });
+    document.getElementById(modalId).style.display = 'block';
+}
+
+function closeModal() {
+    document.getElementById('modal-overlay').style.display = 'none';
+}
+
+function showStats() {
+    fetch('/api/stats')
+        .then(response => response.json())
+        .then(stats => {
+            document.getElementById('stats-total-users').textContent = stats.totalUsers;
+            document.getElementById('stats-online-users').textContent = stats.onlineUsers;
+            document.getElementById('stats-total-messages').textContent = stats.totalMessages;
+            showModal('stats-modal');
+        });
+}
+
 // Вспомогательные функции
 function formatLastSeen(lastSeen) {
     if (!lastSeen) return 'давно';
@@ -705,6 +620,21 @@ function formatLastSeen(lastSeen) {
     return `${Math.floor(diffMinutes / 1440)} дн назад`;
 }
 
+function formatDate(dateString) {
+    return new Date(dateString).toLocaleDateString('ru-RU', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+    });
+}
+
+function formatTime(dateString) {
+    return new Date(dateString).toLocaleTimeString('ru-RU', {
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
 function toggleDropdown(event) {
     event.stopPropagation();
     const dropdown = document.getElementById('user-dropdown');
@@ -717,10 +647,6 @@ function closeAllDropdowns() {
     });
 }
 
-function updateChatsList() {
-    // В упрощенной версии не реализовано
-}
-
 function startNewChat() {
     showTab('search');
 }
@@ -731,11 +657,24 @@ function showChatInfo() {
         return;
     }
     
-    const info = selectedChat.type === 'user' ? 
-        `Личная переписка с ${selectedChat.name}` :
-        `Группа: ${selectedChat.name}`;
+    showNotification(`Чат с ${selectedChat.name}`, 'info');
+}
+
+function clearChat() {
+    if (!selectedChat) return;
     
-    showNotification(info, 'info');
+    if (confirm('Очистить историю переписки?')) {
+        const container = document.getElementById('messages-container');
+        container.innerHTML = `
+            <div class="welcome-message">
+                <div class="welcome-icon">
+                    <i class="fas fa-comments"></i>
+                </div>
+                <h3>История очищена</h3>
+                <p>Начните общение заново!</p>
+            </div>
+        `;
+    }
 }
 
 function logout() {
@@ -745,7 +684,6 @@ function logout() {
         allMessages = [];
         allUsers = [];
         friends = [];
-        groups = [];
         notifications = [];
         
         document.getElementById('chat-screen').classList.remove('active');
@@ -760,6 +698,3 @@ function logout() {
         }
     }
 }
-
-// Инициализация при загрузке
-console.log('🚀 Quantum Messenger initialized');
