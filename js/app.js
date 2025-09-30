@@ -6,7 +6,7 @@ let allUsers = [];
 let friends = [];
 let notifications = [];
 
-const BACKEND_URL = 'http://localhost:5000';
+const BACKEND_URL = 'https://quantum-backend-yi39.onrender.com';
 
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🌌 Quantum Messenger started');
@@ -698,3 +698,4 @@ function logout() {
         }
     }
 }
+
