@@ -17,8 +17,8 @@ const io = socketIo(server, {
 app.use(cors());
 app.use(express.json());
 
-// Подключение к MongoDB Atlas
-const MONGODB_URI = 'mongodb+srv://alekseyreetilo92_db_user:X0GRrC0ioe6kF5du@quantun.2rz1att.mongodb.net/quantum_messenger?retryWrites=true&w=majority';
+// ПРАВИЛЬНАЯ строка подключения к твоей MongoDB
+const MONGODB_URI = 'mongodb+srv://alekseyreetilo92_db_user:X0GRrC0ioe6kF5du@quantun.2rz1att.mongodb.net/quantum_messenger?retryWrites=true&w=majority&appName=quantun';
 
 mongoose.connect(MONGODB_URI, {
   useNewUrlParser: true,
@@ -556,4 +556,3 @@ server.listen(PORT, () => {
   console.log(`🗄️ MongoDB Atlas Connected`);
   console.log(`🔒 Friend-only messaging enabled`);
 });
-
