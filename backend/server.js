@@ -28,19 +28,23 @@ io.on('connection', (socket) => {
 
   // Автоматический вход/регистрация
   socket.on('login', (userData) => {
-    let user = users.find(u => u.username === userData.username);
+    let user = users.find(u => u.username.toLowerCase() === userData.username.toLowerCase());
     
     if (!user) {
       user = {
         id: Date.now() + Math.random(),
         username: userData.username,
+        email: userData.email || '',
         isOnline: true,
         lastSeen: new Date(),
         socketId: socket.id,
         avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.username)}&background=667eea&color=fff&bold=true`,
         status: 'online',
-        friends: [],
-        groups: []
+        language: 'ru',
+        timezone: 'Europe/Moscow',
+        bio: '',
+        createdAt: new Date(),
+        lastActive: new Date()
       };
       users.push(user);
     } else {
@@ -48,6 +52,7 @@ io.on('connection', (socket) => {
       user.socketId = socket.id;
       user.lastSeen = new Date();
       user.status = 'online';
+      user.lastActive = new Date();
     }
 
     socket.userId = user.id;
@@ -65,12 +70,8 @@ io.on('connection', (socket) => {
     socket.emit('usersList', users);
     
     // Отправляем друзей
-    const userFriends = friendships.filter(f => 
-      (f.userId === user.id || f.friendId === user.id) && f.status === 'accepted'
-    ).map(f => f.userId === user.id ? f.friendId : f.userId);
-    
-    const friendsList = users.filter(u => userFriends.includes(u.id));
-    socket.emit('friendsList', friendsList);
+    const userFriends = getFriends(user.id);
+    socket.emit('friendsList', userFriends);
     
     // Отправляем группы пользователя
     const userGroups = groups.filter(g => g.members.includes(user.id));
@@ -80,6 +81,23 @@ io.on('connection', (socket) => {
     io.emit('userStatusUpdate', user);
     
     console.log('🔓 User logged in:', user.username);
+  });
+
+  // Обновление профиля
+  socket.on('updateProfile', (profileData) => {
+    const user = users.find(u => u.socketId === socket.id);
+    if (user) {
+      if (profileData.username) user.username = profileData.username;
+      if (profileData.email) user.email = profileData.email;
+      if (profileData.bio) user.bio = profileData.bio;
+      if (profileData.language) user.language = profileData.language;
+      if (profileData.timezone) user.timezone = profileData.timezone;
+      if (profileData.avatar) user.avatar = profileData.avatar;
+      
+      io.emit('userProfileUpdated', user);
+      socket.emit('profileUpdateSuccess', user);
+      console.log('📝 Profile updated:', user.username);
+    }
   });
 
   // Поиск пользователей
@@ -92,16 +110,8 @@ io.on('connection', (socket) => {
       user.id !== currentUser.id
     ).map(user => ({
       ...user,
-      isFriend: friendships.some(f => 
-        ((f.userId === currentUser.id && f.friendId === user.id) ||
-         (f.friendId === currentUser.id && f.userId === user.id)) &&
-        f.status === 'accepted'
-      ),
-      hasPendingRequest: friendships.some(f => 
-        f.userId === currentUser.id && 
-        f.friendId === user.id && 
-        f.status === 'pending'
-      )
+      isFriend: isFriend(currentUser.id, user.id),
+      hasPendingRequest: hasPendingRequest(currentUser.id, user.id)
     }));
     
     socket.emit('searchResults', results);
@@ -185,57 +195,53 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Создание группового чата
-  socket.on('createGroup', (data) => {
+  // Отклонение заявки в друзья
+  socket.on('rejectFriend', (friendshipId) => {
+    const friendship = friendships.find(f => f.id === friendshipId);
+    if (friendship) {
+      friendships = friendships.filter(f => f.id !== friendshipId);
+      
+      const user = users.find(u => u.id === friendship.userId);
+      if (user && user.socketId) {
+        io.to(user.socketId).emit('friendRequestRejected', {
+          friendshipId: friendshipId
+        });
+      }
+    }
+  });
+
+  // Удаление из друзей
+  socket.on('removeFriend', (friendId) => {
     const currentUser = users.find(u => u.socketId === socket.id);
     if (!currentUser) return;
 
-    const group = {
-      id: Date.now() + Math.random(),
-      name: data.name,
-      creator: currentUser.id,
-      members: [currentUser.id, ...data.members],
-      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(data.name)}&background=764ba2&color=fff&bold=true`,
-      createdAt: new Date(),
-      description: data.description || ''
-    };
-    groups.push(group);
+    friendships = friendships.filter(f => 
+      !((f.userId === currentUser.id && f.friendId === friendId) ||
+        (f.friendId === currentUser.id && f.userId === friendId))
+    );
     
-    // Уведомление участникам
-    group.members.forEach(memberId => {
-      const member = users.find(u => u.id === memberId);
-      if (member && member.socketId) {
-        io.to(member.socketId).emit('groupCreated', group);
-        io.to(member.socketId).emit('newNotification', {
-          id: Date.now() + Math.random(),
-          type: 'group_invite',
-          from: currentUser,
-          to: memberId,
-          message: `Вас добавили в группу "${data.name}"`,
-          timestamp: new Date(),
-          read: false
-        });
-      }
-    });
-
-    // Создаем приветственное сообщение
-    const welcomeMessage = {
-      id: Date.now() + Math.random(),
-      senderId: currentUser.id,
-      senderName: 'System',
-      groupId: group.id,
-      text: `Группа "${data.name}" создана! Добро пожаловать!`,
-      type: 'system',
-      timestamp: new Date()
-    };
-    messages.push(welcomeMessage);
-    io.emit('newMessage', welcomeMessage);
+    socket.emit('friendRemoved', friendId);
+    
+    // Уведомляем другого пользователя
+    const friend = users.find(u => u.id === friendId);
+    if (friend && friend.socketId) {
+      io.to(friend.socketId).emit('friendRemoved', currentUser.id);
+      io.to(friend.socketId).emit('friendsList', getFriends(friend.id));
+    }
+    
+    socket.emit('friendsList', getFriends(currentUser.id));
   });
 
-  // Отправка сообщения
+  // Отправка сообщения (только друзьям)
   socket.on('sendMessage', (data) => {
     const currentUser = users.find(u => u.socketId === socket.id);
     if (!currentUser) return;
+
+    // Проверяем, являются ли пользователи друзьями
+    if (data.receiverId && !isFriend(currentUser.id, data.receiverId)) {
+      socket.emit('messageError', 'Вы можете отправлять сообщения только друзьям');
+      return;
+    }
 
     const message = {
       id: Date.now() + Math.random(),
@@ -253,19 +259,8 @@ io.on('connection', (socket) => {
     
     messages.push(message);
     
-    if (data.groupId) {
-      // Групповое сообщение
-      const group = groups.find(g => g.id === data.groupId);
-      if (group) {
-        group.members.forEach(memberId => {
-          const member = users.find(u => u.id === memberId);
-          if (member && member.socketId) {
-            io.to(member.socketId).emit('newMessage', message);
-          }
-        });
-      }
-    } else {
-      // Личное сообщение
+    if (data.receiverId) {
+      // Личное сообщение другу
       const receiver = users.find(u => u.id === data.receiverId);
       if (receiver && receiver.socketId) {
         io.to(receiver.socketId).emit('newMessage', message);
@@ -312,27 +307,14 @@ io.on('connection', (socket) => {
         });
       }
       
-      // Рассылаем обновленное сообщение
-      if (message.groupId) {
-        const group = groups.find(g => g.id === message.groupId);
-        if (group) {
-          group.members.forEach(memberId => {
-            const member = users.find(u => u.id === memberId);
-            if (member && member.socketId) {
-              io.to(member.socketId).emit('messageUpdated', message);
-            }
-          });
+      // Рассылаем обновленное сообщение участникам чата
+      const participants = [message.senderId, message.receiverId].filter(id => id);
+      participants.forEach(userId => {
+        const user = users.find(u => u.id === userId);
+        if (user && user.socketId) {
+          io.to(user.socketId).emit('messageUpdated', message);
         }
-      } else {
-        // Личное сообщение
-        const participants = [message.senderId, message.receiverId];
-        participants.forEach(userId => {
-          const user = users.find(u => u.id === userId);
-          if (user && user.socketId) {
-            io.to(user.socketId).emit('messageUpdated', message);
-          }
-        });
-      }
+      });
     }
   });
 
@@ -366,8 +348,26 @@ io.on('connection', (socket) => {
       if (status === 'offline') {
         currentUser.isOnline = false;
         currentUser.lastSeen = new Date();
+      } else {
+        currentUser.isOnline = true;
       }
+      currentUser.lastActive = new Date();
       io.emit('userStatusUpdate', currentUser);
+    }
+  });
+
+  // Получение pending заявок в друзья
+  socket.on('getPendingRequests', () => {
+    const currentUser = users.find(u => u.socketId === socket.id);
+    if (currentUser) {
+      const pendingRequests = friendships.filter(f => 
+        f.friendId === currentUser.id && f.status === 'pending'
+      ).map(f => ({
+        friendship: f,
+        user: users.find(u => u.id === f.userId)
+      }));
+      
+      socket.emit('pendingRequests', pendingRequests);
     }
   });
 
@@ -377,6 +377,7 @@ io.on('connection', (socket) => {
       user.isOnline = false;
       user.status = 'offline';
       user.lastSeen = new Date();
+      user.lastActive = new Date();
       io.emit('userStatusUpdate', user);
     }
     console.log('🔌 User disconnected:', socket.id);
@@ -394,16 +395,40 @@ io.on('connection', (socket) => {
     
     return users.filter(u => friendIds.includes(u.id));
   }
+
+  function isFriend(userId, friendId) {
+    return friendships.some(f => 
+      ((f.userId === userId && f.friendId === friendId) ||
+       (f.friendId === userId && f.userId === friendId)) &&
+      f.status === 'accepted'
+    );
+  }
+
+  function hasPendingRequest(userId, friendId) {
+    return friendships.some(f => 
+      f.userId === userId && 
+      f.friendId === friendId && 
+      f.status === 'pending'
+    );
+  }
 });
 
 // API маршруты
 app.get('/', (req, res) => {
   res.json({ 
     message: '🌌 Quantum Messenger API is running!',
+    version: '4.0',
+    features: [
+      'Реальные пользователи',
+      'Система друзей', 
+      'Личные сообщения',
+      'Редактирование профиля',
+      'Многоязычность',
+      'Уведомления'
+    ],
     stats: {
       users: users.length,
       messages: messages.length,
-      groups: groups.length,
       friendships: friendships.length
     }
   });
@@ -413,12 +438,24 @@ app.get('/api/users', (req, res) => {
   res.json(users);
 });
 
-app.get('/api/messages', (req, res) => {
-  res.json(messages);
+app.get('/api/stats', (req, res) => {
+  const stats = {
+    totalUsers: users.length,
+    onlineUsers: users.filter(u => u.isOnline).length,
+    totalMessages: messages.length,
+    totalFriendships: friendships.length,
+    activeToday: users.filter(u => {
+      const today = new Date();
+      const userDate = new Date(u.lastActive);
+      return userDate.toDateString() === today.toDateString();
+    }).length
+  };
+  res.json(stats);
 });
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`🚀 Quantum Server running on port ${PORT}`);
-  console.log(`📊 Ready for connections`);
+  console.log(`📊 Real users system activated`);
+  console.log(`🔒 Friend-only messaging enabled`);
 });
