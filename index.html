@@ -26,7 +26,6 @@
                     <button id="auth-button" class="btn-primary">
                         <i class="fas fa-rocket"></i> Начать общение
                     </button>
-                    <p id="auth-switch" style="display: none;">Нет аккаунта? <a href="#" onclick="switchAuth()">Зарегистрироваться</a></p>
                 </div>
                 
                 <div class="features-preview">
@@ -44,6 +43,7 @@
                     </div>
                 </div>
 
+                <!-- ЗАМЕНА: Вместо быстрого входа - список обновлений -->
                 <div class="changelog">
                     <h4>🚀 Quantum 4.0 - Что нового:</h4>
                     <ul>
@@ -260,9 +260,6 @@
                                 <button class="btn-icon" onclick="showFileOptions()" title="Прикрепить файл">
                                     <i class="far fa-file"></i>
                                 </button>
-                                <button class="btn-icon" onclick="showMoreOptions()" title="Еще опции">
-                                    <i class="fas fa-ellipsis-h"></i>
-                                </button>
                             </div>
                             <input type="text" id="message-text" placeholder="Напишите сообщение другу..." onkeypress="handleKeyPress(event)">
                             <button onclick="sendMessage()" id="send-button" class="btn-primary" title="Отправить">
@@ -287,21 +284,6 @@
                                     <span onclick="addEmoji('👍')">👍</span>
                                     <span onclick="addEmoji('🔥')">🔥</span>
                                     <span onclick="addEmoji('🎉')">🎉</span>
-                                    <span onclick="addEmoji('🙏')">🙏</span>
-                                    <span onclick="addEmoji('💯')">💯</span>
-                                </div>
-                            </div>
-                            <div class="emoji-category">
-                                <span>Смайлики</span>
-                                <div class="emoji-row">
-                                    <span onclick="addEmoji('😊')">😊</span>
-                                    <span onclick="addEmoji('😎')">😎</span>
-                                    <span onclick="addEmoji('🥰')">🥰</span>
-                                    <span onclick="addEmoji('😅')">😅</span>
-                                    <span onclick="addEmoji('🤔')">🤔</span>
-                                    <span onclick="addEmoji('😴')">😴</span>
-                                    <span onclick="addEmoji('😡')">😡</span>
-                                    <span onclick="addEmoji('🤯')">🤯</span>
                                 </div>
                             </div>
                         </div>
@@ -358,7 +340,6 @@
                             <option value="ru">Русский</option>
                             <option value="en">English</option>
                             <option value="es">Español</option>
-                            <option value="de">Deutsch</option>
                         </select>
                     </div>
                     
@@ -368,7 +349,6 @@
                             <option value="Europe/Moscow">Москва (+3)</option>
                             <option value="Europe/London">Лондон (+0)</option>
                             <option value="America/New_York">Нью-Йорк (-5)</option>
-                            <option value="Asia/Tokyo">Токио (+9)</option>
                         </select>
                     </div>
                 </div>
@@ -465,31 +445,6 @@
                             <div class="stat-label">Всего сообщений</div>
                         </div>
                     </div>
-                    <div class="stat-card">
-                        <div class="stat-icon">
-                            <i class="fas fa-handshake"></i>
-                        </div>
-                        <div class="stat-content">
-                            <div class="stat-number" id="stats-friendships">0</div>
-                            <div class="stat-label">Дружеских связей</div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="activity-chart">
-                    <h4>Активность за сегодня</h4>
-                    <div class="chart-placeholder">
-                        <i class="fas fa-chart-bar"></i>
-                        <p>График активности</p>
-                        <div class="chart-bars">
-                            <div class="bar" style="height: 60%"></div>
-                            <div class="bar" style="height: 80%"></div>
-                            <div class="bar" style="height: 45%"></div>
-                            <div class="bar" style="height: 90%"></div>
-                            <div class="bar" style="height: 70%"></div>
-                            <div class="bar" style="height: 85%"></div>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
@@ -497,9 +452,6 @@
 
     <!-- Всплывающие уведомления -->
     <div id="notification-toast" class="notification-toast"></div>
-
-    <!-- Контекстное меню -->
-    <div id="context-menu" class="context-menu"></div>
 
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script src="js/app.js"></script>
