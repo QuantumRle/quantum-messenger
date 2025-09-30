@@ -6,7 +6,7 @@ let allUsers = [];
 let friends = [];
 let notifications = [];
 
-const BACKEND_URL = 'https://quantum-backend-yi39.onrender.com';
+const BACKEND_URL = 'http://messengerapp.free.nf';
 
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🌌 Quantum Messenger started');
@@ -698,4 +698,5 @@ function logout() {
         }
     }
 }
+
 
