@@ -1,7 +1,7 @@
 {
   "name": "quantum-backend",
-  "version": "4.0.0",
-  "description": "Quantum Messenger with MongoDB",
+  "version": "4.0.0", 
+  "description": "Quantum Messenger with MySQL",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -11,7 +11,7 @@
     "express": "^4.18.2",
     "socket.io": "^4.7.2",
     "cors": "^2.8.5",
-    "mongoose": "^7.5.0"
+    "mysql2": "^3.6.0"
   },
   "engines": {
     "node": ">=16.0.0"
