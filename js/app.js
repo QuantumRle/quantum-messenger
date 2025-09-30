@@ -8,185 +8,91 @@ let notifications = [];
 
 const BACKEND_URL = 'http://messengerapp.free.nf';
 
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('🌌 Quantum Messenger started');
-    initializeApp();
-});
+// Проверяем сессию при загрузке
+const savedToken = localStorage.getItem('quantum_token');
+if (savedToken) {
+    verifySession(savedToken);
+}
+
+async function verifySession(token) {
+    try {
+        const response = await fetch(BACKEND_URL + '/api.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                action: 'verify_session',
+                token: token
+            })
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            currentUser = result.user;
+            initializeApp();
+        } else {
+            localStorage.removeItem('quantum_token');
+        }
+    } catch (error) {
+        console.error('Session verification failed:', error);
+    }
+}
 
 function initializeApp() {
-    socket = io(BACKEND_URL);
+    console.log('🌌 Quantum Messenger started');
     
-    socket.on('connect', () => {
-        console.log('✅ Connected to server');
-        hideError();
-        showNotification('Подключено к серверу', 'success');
-    });
+    // Показываем экран чата
+    showChatScreen();
     
-    socket.on('connect_error', (error) => {
-        console.error('❌ Connection error:', error);
-        showError('Ошибка подключения к серверу');
-    });
-    
-    // Обработчики событий
-    socket.on('loginSuccess', (user) => {
-        console.log('✅ Login success:', user);
-        currentUser = user;
-        showChatScreen();
-        updateUserAvatar();
-        showNotification(`Добро пожаловать, ${user.username}!`, 'success');
-    });
-    
-    socket.on('usersList', (users) => {
-        console.log('👥 Users list:', users.length);
-        allUsers = users;
-        updateOnlineCount();
-    });
-    
-    socket.on('friendsList', (friendsList) => {
-        console.log('🤝 Friends list:', friendsList.length);
-        friends = friendsList;
-        renderFriendsList();
-        updateFriendsStats();
-    });
-    
-    socket.on('newMessage', (message) => {
-        console.log('💬 New message:', message);
-        allMessages.push(message);
-        
-        if (selectedChat && selectedChat.id === message.senderId) {
-            displayMessage(message);
-        } else if (message.senderId !== currentUser.id) {
-            showNotification(`Новое сообщение от ${message.senderName}`, 'info');
-        }
-    });
-    
-    socket.on('messageHistory', (messages) => {
-        console.log('📨 Message history:', messages.length);
-        allMessages = messages;
-        if (selectedChat) {
-            displayChatHistory();
-        }
-    });
-    
-    socket.on('searchResults', (results) => {
-        renderSearchResults(results);
-    });
-    
-    socket.on('friendRequest', (data) => {
-        console.log('📩 Friend request from:', data.from.username);
-        showNotification(`${data.from.username} отправил запрос в друзья`, 'info');
-        refreshRequests();
-    });
-    
-    socket.on('friendAccepted', (friend) => {
-        console.log('✅ Friend accepted:', friend.username);
-        showNotification(`${friend.username} принял вашу заявку в друзья`, 'success');
-        renderFriendsList();
-    });
-    
-    socket.on('userStatusUpdate', (user) => {
-        const index = allUsers.findIndex(u => u.id === user.id);
-        if (index > -1) {
-            allUsers[index] = user;
-        }
-        updateOnlineCount();
-        renderFriendsList();
-        
-        if (selectedChat && selectedChat.id === user.id) {
-            updateChatStatus(user);
-        }
-    });
-    
-    socket.on('newNotification', (notification) => {
-        console.log('🔔 New notification:', notification);
-        notifications.push(notification);
-        updateNotificationBadge();
-    });
-    
-    socket.on('pendingRequests', (requests) => {
-        renderPendingRequests(requests);
-    });
-
-    setupEventListeners();
-}
-
-function setupEventListeners() {
-    document.getElementById('auth-button').addEventListener('click', handleAuth);
-    document.getElementById('username').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') handleAuth();
-    });
-    
-    document.addEventListener('click', (e) => {
-        if (!e.target.closest('.dropdown')) {
-            closeAllDropdowns();
-        }
-    });
-}
-
-function handleAuth() {
-    const username = document.getElementById('username').value.trim();
-    
-    if (!username) {
-        showError('Введите имя пользователя');
-        return;
-    }
-    
-    if (username.length < 2) {
-        showError('Имя должно быть не менее 2 символов');
-        return;
-    }
-    
-    hideError();
-    
-    const authButton = document.getElementById('auth-button');
-    authButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Подключение...';
-    authButton.disabled = true;
-    
-    socket.emit('login', { username: username });
-}
-
-function showError(message) {
-    const errorDiv = document.getElementById('auth-error');
-    errorDiv.textContent = message;
-    errorDiv.style.display = 'block';
-}
-
-function hideError() {
-    const errorDiv = document.getElementById('auth-error');
-    errorDiv.style.display = 'none';
+    // Загружаем данные
+    loadUsers();
+    loadFriends();
 }
 
 function showChatScreen() {
     document.getElementById('auth-screen').classList.remove('active');
     document.getElementById('chat-screen').classList.add('active');
     
-    document.getElementById('current-user').textContent = currentUser.username;
-    updateUserAvatar();
-}
-
-function updateUserAvatar() {
-    const avatar = document.getElementById('user-avatar');
-    const profileAvatar = document.getElementById('profile-avatar');
-    if (currentUser.avatar) {
-        avatar.src = currentUser.avatar;
-        if (profileAvatar) profileAvatar.src = currentUser.avatar;
+    if (currentUser) {
+        const userElement = document.getElementById('current-user');
+        if (userElement) {
+            userElement.textContent = currentUser.username;
+        }
+        
+        // Обновляем аватар
+        const avatarElement = document.getElementById('user-avatar');
+        if (avatarElement && currentUser.avatar) {
+            avatarElement.src = currentUser.avatar;
+        }
     }
 }
 
+async function loadUsers() {
+    try {
+        const response = await fetch(BACKEND_URL + '/api.php?action=get_users');
+        const result = await response.json();
+        
+        if (result.success) {
+            allUsers = result.users;
+            updateOnlineCount();
+            renderUsersList();
+        }
+    } catch (error) {
+        console.error('Error loading users:', error);
+    }
+}
+
+async function loadFriends() {
+    // В упрощенной версии считаем всех пользователей друзьями
+    friends = allUsers.filter(user => user.id !== currentUser.id);
+    renderFriendsList();
+}
+
 function updateOnlineCount() {
-    const onlineCount = allUsers.filter(user => user.isOnline).length;
+    const onlineCount = allUsers.filter(user => user.is_online).length;
     const countElement = document.getElementById('online-count');
     if (countElement) {
         countElement.textContent = `${onlineCount} онлайн`;
     }
-}
-
-function updateFriendsStats() {
-    const onlineFriends = friends.filter(f => f.isOnline).length;
-    document.getElementById('friends-online').textContent = onlineFriends;
-    document.getElementById('friends-total').textContent = friends.length;
-    document.getElementById('stat-friends').textContent = friends.length;
-    document.getElementById('stat-online').textContent = onlineFriends;
 }
 
 // Система вкладок
@@ -200,10 +106,6 @@ function showTab(tabName) {
     
     document.getElementById(`${tabName}-tab`).classList.add('active');
     document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
-    
-    if (tabName === 'requests') {
-        refreshRequests();
-    }
 }
 
 function renderFriendsList() {
@@ -225,18 +127,42 @@ function renderFriendsList() {
     
     friendsList.innerHTML = friends.map(friend => `
         <div class="friend-item" onclick="selectUserChat('${friend.id}')">
-            <img src="${friend.avatar}" class="avatar">
+            <img src="${friend.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(friend.username)}&background=667eea&color=fff`}" class="avatar">
             <div class="friend-info">
                 <div class="friend-name">${friend.username}</div>
-                <div class="friend-status ${friend.isOnline ? 'online' : 'offline'}">
-                    ${friend.isOnline ? 'В сети' : `Был(а) ${formatLastSeen(friend.lastSeen)}`}
+                <div class="friend-status ${friend.is_online ? 'online' : 'offline'}">
+                    ${friend.is_online ? 'В сети' : `Был(а) ${formatLastSeen(friend.last_seen)}`}
                 </div>
             </div>
-            <div class="status-indicator ${friend.isOnline ? 'online' : 'offline'}"></div>
+            <div class="status-indicator ${friend.is_online ? 'online' : 'offline'}"></div>
         </div>
     `).join('');
+}
+
+function renderUsersList() {
+    // Для поиска пользователей
+}
+
+async function searchUsers() {
+    const searchTerm = document.getElementById('global-search').value.trim();
     
-    updateFriendsStats();
+    if (searchTerm.length < 2) {
+        document.getElementById('search-results').innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-search"></i>
+                <p>Введите минимум 2 символа</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Фильтруем пользователей по имени
+    const results = allUsers.filter(user => 
+        user.username.toLowerCase().includes(searchTerm.toLowerCase()) &&
+        user.id !== currentUser.id
+    );
+    
+    renderSearchResults(results);
 }
 
 function renderSearchResults(results) {
@@ -255,97 +181,49 @@ function renderSearchResults(results) {
     
     searchResults.innerHTML = results.map(user => `
         <div class="search-item">
-            <img src="${user.avatar}" class="avatar">
+            <img src="${user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username)}&background=667eea&color=fff`}" class="avatar">
             <div class="search-info">
                 <div class="search-name">${user.username}</div>
-                <div class="search-status ${user.isOnline ? 'online' : 'offline'}">
-                    ${user.isOnline ? 'В сети' : 'Не в сети'}
+                <div class="search-status ${user.is_online ? 'online' : 'offline'}">
+                    ${user.is_online ? 'В сети' : 'Не в сети'}
                 </div>
             </div>
             <div class="search-actions">
-                ${user.isFriend ? 
-                    '<span class="friend-badge">Друг</span>' :
-                    user.hasPendingRequest ?
-                    '<span class="pending-badge">Запрос отправлен</span>' :
-                    `<button class="btn-primary btn-small" onclick="addFriend('${user.id}')">
-                        <i class="fas fa-user-plus"></i> Добавить
-                    </button>`
-                }
-            </div>
-        </div>
-    `).join('');
-}
-
-function renderPendingRequests(requests) {
-    const requestsList = document.getElementById('requests-list');
-    if (!requestsList) return;
-    
-    if (requests.length === 0) {
-        requestsList.innerHTML = `
-            <div class="empty-state">
-                <i class="fas fa-user-clock"></i>
-                <p>Нет заявок в друзья</p>
-            </div>
-        `;
-        return;
-    }
-    
-    requestsList.innerHTML = requests.map(request => `
-        <div class="request-item">
-            <img src="${request.user.avatar}" class="avatar">
-            <div class="request-info">
-                <div class="request-name">${request.user.username}</div>
-                <div class="request-time">${formatTime(request.friendship.createdAt)}</div>
-            </div>
-            <div class="request-actions">
-                <button class="btn-success btn-small" onclick="acceptFriend('${request.friendship.id}')">
-                    <i class="fas fa-check"></i>
-                </button>
-                <button class="btn-danger btn-small" onclick="rejectFriend('${request.friendship.id}')">
-                    <i class="fas fa-times"></i>
+                <button class="btn-primary btn-small" onclick="addFriend('${user.id}')">
+                    <i class="fas fa-user-plus"></i> Добавить
                 </button>
             </div>
         </div>
     `).join('');
 }
 
-// Поиск пользователей
-function searchUsers() {
-    const searchTerm = document.getElementById('global-search').value.trim();
-    
-    if (searchTerm.length < 2) {
-        document.getElementById('search-results').innerHTML = `
-            <div class="empty-state">
-                <i class="fas fa-search"></i>
-                <p>Введите минимум 2 символа</p>
-            </div>
-        `;
-        return;
+async function addFriend(friendId) {
+    try {
+        const response = await fetch(BACKEND_URL + '/api.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                action: 'add_friend',
+                token: localStorage.getItem('quantum_token'),
+                friend_id: friendId
+            })
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('Запрос в друзья отправлен', 'success');
+        } else {
+            showNotification(result.error, 'error');
+        }
+    } catch (error) {
+        console.error('Error adding friend:', error);
+        showNotification('Ошибка отправки запроса', 'error');
     }
-    
-    socket.emit('searchUsers', searchTerm);
 }
 
-// Работа с друзьями
-function addFriend(friendId) {
-    socket.emit('addFriend', friendId);
-}
-
-function acceptFriend(friendshipId) {
-    socket.emit('acceptFriend', friendshipId);
-}
-
-function rejectFriend(friendshipId) {
-    socket.emit('rejectFriend', friendshipId);
-}
-
-function refreshRequests() {
-    socket.emit('getPendingRequests');
-}
-
-// Выбор чатов
+// Выбор чата
 function selectUserChat(userId) {
-    const user = allUsers.find(u => u.id === userId);
+    const user = allUsers.find(u => u.id == userId);
     if (!user) return;
     
     selectedChat = {
@@ -356,44 +234,65 @@ function selectUserChat(userId) {
     };
     
     showChat();
+    loadChatHistory(userId);
+}
+
+async function loadChatHistory(otherUserId) {
+    try {
+        const response = await fetch(BACKEND_URL + '/api.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                action: 'get_messages',
+                token: localStorage.getItem('quantum_token'),
+                other_user_id: otherUserId
+            })
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            displayChatHistory(result.messages);
+        }
+    } catch (error) {
+        console.error('Error loading chat history:', error);
+    }
 }
 
 function showChat() {
     if (!selectedChat) return;
     
     document.getElementById('selected-chat-name').textContent = selectedChat.name;
-    document.getElementById('chat-avatar').src = selectedChat.avatar;
+    const chatAvatar = document.getElementById('chat-avatar');
+    if (chatAvatar) {
+        chatAvatar.src = selectedChat.avatar;
+    }
     
-    const user = allUsers.find(u => u.id === selectedChat.id);
+    const user = allUsers.find(u => u.id == selectedChat.id);
     updateChatStatus(user);
     
     document.getElementById('message-input-area').style.display = 'flex';
-    displayChatHistory();
 }
 
 function updateChatStatus(user) {
     const statusElement = document.getElementById('chat-status');
-    if (user.isOnline) {
+    if (!statusElement) return;
+    
+    if (user.is_online) {
         statusElement.textContent = 'В сети';
         statusElement.className = 'status online';
     } else {
-        statusElement.textContent = `Был(а) ${formatLastSeen(user.lastSeen)}`;
+        statusElement.textContent = `Был(а) ${formatLastSeen(user.last_seen)}`;
         statusElement.className = 'status offline';
     }
 }
 
-function displayChatHistory() {
+function displayChatHistory(messages) {
     const container = document.getElementById('messages-container');
+    if (!container) return;
+    
     container.innerHTML = '';
     
-    const chatMessages = allMessages.filter(msg => 
-        (msg.senderId === currentUser.id && msg.receiverId === selectedChat.id) ||
-        (msg.senderId === selectedChat.id && msg.receiverId === currentUser.id)
-    );
-    
-    chatMessages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-    
-    if (chatMessages.length === 0) {
+    if (messages.length === 0) {
         container.innerHTML = `
             <div class="welcome-message">
                 <div class="welcome-icon">
@@ -406,20 +305,22 @@ function displayChatHistory() {
         return;
     }
     
-    chatMessages.forEach(message => displayMessage(message));
+    messages.forEach(message => displayMessage(message));
     container.scrollTop = container.scrollHeight;
 }
 
 function displayMessage(message) {
     const container = document.getElementById('messages-container');
+    if (!container) return;
     
+    // Убираем welcome сообщение если есть
     const welcomeMessage = container.querySelector('.welcome-message');
     if (welcomeMessage) {
         container.innerHTML = '';
     }
     
     const messageElement = document.createElement('div');
-    const isOwnMessage = message.senderId === currentUser.id;
+    const isOwnMessage = message.sender_id == currentUser.id;
     
     messageElement.className = `message ${isOwnMessage ? 'own' : 'other'}`;
     
@@ -437,7 +338,7 @@ function displayMessage(message) {
 }
 
 // Отправка сообщений
-function sendMessage() {
+async function sendMessage() {
     if (!selectedChat) {
         showNotification('Выберите друга для отправки сообщения', 'warning');
         return;
@@ -448,14 +349,39 @@ function sendMessage() {
     
     if (!text) return;
     
-    const messageData = {
-        text: text,
-        type: 'text',
-        receiverId: selectedChat.id
-    };
-    
-    socket.emit('sendMessage', messageData);
-    textInput.value = '';
+    try {
+        const response = await fetch(BACKEND_URL + '/api.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                action: 'send_message',
+                token: localStorage.getItem('quantum_token'),
+                receiver_id: selectedChat.id,
+                text: text
+            })
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            // Добавляем сообщение в историю
+            const newMessage = {
+                id: result.message_id,
+                sender_id: currentUser.id,
+                sender_name: currentUser.username,
+                receiver_id: selectedChat.id,
+                text: text,
+                timestamp: new Date()
+            };
+            
+            displayMessage(newMessage);
+            textInput.value = '';
+        } else {
+            showNotification(result.error, 'error');
+        }
+    } catch (error) {
+        console.error('Error sending message:', error);
+        showNotification('Ошибка отправки сообщения', 'error');
+    }
 }
 
 function handleKeyPress(event) {
@@ -465,22 +391,11 @@ function handleKeyPress(event) {
     }
 }
 
-// Эмодзи
-function toggleEmojiPicker() {
-    const picker = document.getElementById('emoji-picker');
-    picker.style.display = picker.style.display === 'none' ? 'block' : 'none';
-}
-
-function addEmoji(emoji) {
-    const textInput = document.getElementById('message-text');
-    textInput.value += emoji;
-    textInput.focus();
-    toggleEmojiPicker();
-}
-
 // Уведомления
 function showNotification(message, type = 'info') {
     const toast = document.getElementById('notification-toast');
+    if (!toast) return;
+    
     const bgColor = type === 'error' ? '#f56565' : 
                    type === 'success' ? '#48bb78' : 
                    type === 'warning' ? '#ed8936' : 
@@ -499,113 +414,6 @@ function showNotification(message, type = 'info') {
     }, 3000);
 }
 
-function showNotifications() {
-    showModal('notifications-modal');
-}
-
-function updateNotificationBadge() {
-    const unreadCount = notifications.filter(n => !n.read).length;
-    const badge = document.getElementById('notification-badge');
-    
-    if (unreadCount > 0) {
-        badge.textContent = unreadCount;
-        badge.style.display = 'flex';
-    } else {
-        badge.style.display = 'none';
-    }
-}
-
-// Профиль и настройки
-function showProfile() {
-    if (!currentUser) return;
-    
-    document.getElementById('profile-username').value = currentUser.username;
-    document.getElementById('profile-email').value = currentUser.email || '';
-    document.getElementById('profile-bio').value = currentUser.bio || '';
-    document.getElementById('profile-language').value = currentUser.language || 'ru';
-    document.getElementById('profile-timezone').value = currentUser.timezone || 'Europe/Moscow';
-    
-    document.getElementById('profile-joined').textContent = formatDate(currentUser.createdAt);
-    document.getElementById('profile-last-active').textContent = formatDate(currentUser.lastActive);
-    document.getElementById('stat-messages').textContent = allMessages.filter(m => 
-        m.senderId === currentUser.id
-    ).length;
-    
-    showModal('profile-modal');
-}
-
-function saveProfile() {
-    const profileData = {
-        username: document.getElementById('profile-username').value,
-        email: document.getElementById('profile-email').value,
-        bio: document.getElementById('profile-bio').value,
-        language: document.getElementById('profile-language').value,
-        timezone: document.getElementById('profile-timezone').value
-    };
-    
-    socket.emit('updateProfile', profileData);
-    closeModal();
-    showNotification('Профиль успешно обновлен', 'success');
-}
-
-function changeAvatar() {
-    const avatars = [
-        'https://ui-avatars.com/api/?name=' + encodeURIComponent(currentUser.username) + '&background=667eea&color=fff&bold=true',
-        'https://api.dicebear.com/7.x/avataaars/svg?seed=' + currentUser.username,
-        'https://api.dicebear.com/7.x/micah/svg?seed=' + currentUser.username
-    ];
-    
-    const randomAvatar = avatars[Math.floor(Math.random() * avatars.length)];
-    currentUser.avatar = randomAvatar;
-    updateUserAvatar();
-    showNotification('Аватар обновлен', 'success');
-}
-
-function randomAvatar() {
-    changeAvatar();
-}
-
-// Статусы
-function updateStatus(status) {
-    socket.emit('updateStatus', status);
-    showNotification(`Статус изменен на: ${getStatusText(status)}`, 'success');
-    closeAllDropdowns();
-}
-
-function getStatusText(status) {
-    const statusMap = {
-        'online': 'В сети',
-        'away': 'Отошел',
-        'dnd': 'Не беспокоить',
-        'offline': 'Не в сети'
-    };
-    return statusMap[status] || status;
-}
-
-// Модальные окна
-function showModal(modalId) {
-    document.getElementById('modal-overlay').style.display = 'flex';
-    document.querySelectorAll('.modal').forEach(modal => {
-        modal.style.display = 'none';
-    });
-    document.getElementById(modalId).style.display = 'block';
-}
-
-function closeModal() {
-    document.getElementById('modal-overlay').style.display = 'none';
-}
-
-function showStats() {
-    fetch('/api/stats')
-        .then(response => response.json())
-        .then(stats => {
-            document.getElementById('stats-total-users').textContent = stats.totalUsers;
-            document.getElementById('stats-online-users').textContent = stats.onlineUsers;
-            document.getElementById('stats-total-messages').textContent = stats.totalMessages;
-            showModal('stats-modal');
-        });
-}
-
 // Вспомогательные функции
 function formatLastSeen(lastSeen) {
     if (!lastSeen) return 'давно';
@@ -620,83 +428,23 @@ function formatLastSeen(lastSeen) {
     return `${Math.floor(diffMinutes / 1440)} дн назад`;
 }
 
-function formatDate(dateString) {
-    return new Date(dateString).toLocaleDateString('ru-RU', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric'
-    });
-}
-
-function formatTime(dateString) {
-    return new Date(dateString).toLocaleTimeString('ru-RU', {
-        hour: '2-digit',
-        minute: '2-digit'
-    });
-}
-
-function toggleDropdown(event) {
-    event.stopPropagation();
-    const dropdown = document.getElementById('user-dropdown');
-    dropdown.classList.toggle('show');
-}
-
-function closeAllDropdowns() {
-    document.querySelectorAll('.dropdown-menu').forEach(menu => {
-        menu.classList.remove('show');
-    });
-}
-
-function startNewChat() {
-    showTab('search');
-}
-
-function showChatInfo() {
-    if (!selectedChat) {
-        showNotification('Выберите чат', 'warning');
-        return;
-    }
-    
-    showNotification(`Чат с ${selectedChat.name}`, 'info');
-}
-
-function clearChat() {
-    if (!selectedChat) return;
-    
-    if (confirm('Очистить историю переписки?')) {
-        const container = document.getElementById('messages-container');
-        container.innerHTML = `
-            <div class="welcome-message">
-                <div class="welcome-icon">
-                    <i class="fas fa-comments"></i>
-                </div>
-                <h3>История очищена</h3>
-                <p>Начните общение заново!</p>
-            </div>
-        `;
-    }
-}
-
 function logout() {
-    if (confirm('Выйти из аккаунта?')) {
-        currentUser = null;
-        selectedChat = null;
-        allMessages = [];
-        allUsers = [];
-        friends = [];
-        notifications = [];
-        
-        document.getElementById('chat-screen').classList.remove('active');
-        document.getElementById('auth-screen').classList.add('active');
-        
-        document.getElementById('username').value = '';
-        document.getElementById('auth-button').innerHTML = '<i class="fas fa-rocket"></i> Начать общение';
-        document.getElementById('auth-button').disabled = false;
-        
-        if (socket) {
-            socket.disconnect();
-        }
-    }
+    localStorage.removeItem('quantum_token');
+    currentUser = null;
+    selectedChat = null;
+    
+    document.getElementById('chat-screen').classList.remove('active');
+    document.getElementById('auth-screen').classList.add('active');
+    
+    showNotification('Вы вышли из системы', 'info');
 }
 
-
+// Делаем функции глобальными
+window.showTab = showTab;
+window.searchUsers = searchUsers;
+window.addFriend = addFriend;
+window.selectUserChat = selectUserChat;
+window.sendMessage = sendMessage;
+window.handleKeyPress = handleKeyPress;
+window.logout = logout;
+window.startNewChat = () => showTab('search');
